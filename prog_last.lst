@@ -1,0 +1,2990 @@
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ; Datei:                prog_last.ASM
+                      00002 ; Erstellt von: Florian Müller
+                      00003 ; Erstellt am:  07.01.2011
+                      00004 ;
+                      00005 ; Beschreibung:     
+                      00006 ; PIC 18f4550 steuert die LAST sowie Kommunikation über RS232 und LCD
+                      00007 ; Quarz = 16MHz
+                      00008 ; Baudrate sowie Adresse wird über Dip-Taster (4Bit) abgefragt
+                      00009 ; 
+                      00010 
+                      00011      
+                      00012 ;**********************************************************************************
+                      00013 ; Include-Dateien
+                      00014 ;**********************************************************************************
+                      00015         LIST p=18F4520                          ; Der Prozessortyp wird festgelegt 
+                      00016         include <P18F4520.inc>          ; Headerdatei mit Registerdaten
+                      00001         LIST
+                      00002 
+                      00003 ;==========================================================================
+                      00004 ;  MPASM PIC18F4520 processor include
+                      00005 ; 
+                      00006 ;  (c) Copyright 1999-2007 Microchip Technology, All rights reserved
+                      00007 ;==========================================================================
+                      00008 
+                      01336         LIST
+                      00017 ;**********************************************************************************
+                      00018 ; Configuration erfolgt über die IDE MPLAB -> Configure -> Configuration Bits   
+                      00019 ;**********************************************************************************
+                      00020 
+                      00021 ;**********************************************************************************
+                      00022 ; Variablennamen vergeben
+                      00023 ;**********************************************************************************
+                      00024 
+  00000083            00025 bsr_temp        Equ             0x83                    ; temporäres Bankregister
+  00000084            00026 w_temp      Equ         0x84                    ; temporäres Arbeitsregister
+  00000085            00027 status_temp Equ     0x85                        ; temppräres Statusregister
+                      00028 
+                      00029 #define loop1           0x86                    ; Zeitschleifenwert der 100us Schleife
+                      00030 #define loop2           0x87                    ; Zeitschleifenwert des Multiplikator der 100us Schleife
+                      00031 #define lcd_data        0x88                    ; lcd-Daten, die zum Display uebertragen werden
+                      00032 #define lcd_data2       0x89                    ; lcd-daten, die um 3 Stellen nach rechts geschoben werd
+                            en
+                      00033 #define lcd_status      0x90                    ; busy-flag auslesen
+                      00034 #define lcd_rs_on       0x91                    ; Setzt Steuerwort auf 1 oder 0
+                      00035 #define lcd_startup 0x92                        ; Startup-time für das LCD
+                      00036 #define ad_low          0x93                    ; low-nibble des AD-Werts
+                      00037 #define ad_high         0x94                    ; high-nibble des AD-Werts
+                      00038 
+                      00039 #define address         0x95                    ; Adresse der Platine
+                      00040 #define rs232_byte0     0x96
+                      00041 #define rs232_byte1     0x97
+                      00042 #define rs232_byte2     0x98
+                      00043 #define rs232_byte3     0x99
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00044 #define rs232_byte4     0x9a
+                      00045 #define rs232_byte5     0x9b
+                      00046 #define rs232_byte6     0x9c
+                      00047 #define rs232_byte7     0x9d
+                      00048 #define rs232_byte8     0x9e
+                      00049 #define counter         0x9f
+                      00050 #define befehl          0xa0
+                      00051 #define mode            0xa1                    ; Display Mode auswählen
+                      00052 #define I_low           0xa2                    ; low Byte der Strombegrenzung
+                      00053 #define I_high          0xa3                    ; high Byte der Strombegrenzung
+                      00054 #define U_low           0xa4                    ; low Byte der Spannungsbegrenzung
+                      00055 #define U_high          0xa5                    ; high Byte der Spannungsbegrenzung
+                      00056 #define R_low           0xa6                    ; low Byte des Widerstandswerts
+                      00057 #define R_high          0xa7                    ; high Byte des Widerstandswerts
+                      00058 #define Temp            0xa8                    ; Temperaturwert
+                      00059 #define P_low           0xa9                    ; low Byte der Leistung
+                      00060 #define P_high          0xaa                    ; high Byte der Leistung
+                      00061 #define mini_loop       0xab                    ; loop zum widerholen von Anweisungen
+                      00062 #define bcd_U_1         0xac                    ; Einer BCD U
+                      00063 #define bcd_U_2         0xad                    ; Zehner BCD U
+                      00064 #define bcd_U_3         0xae                    ; Hunderter BCD U
+                      00065 #define bcd_U_4         0xaf                    ; Tausender BCD U
+                      00066 #define bcd_I_1         0xb0                    ; Einer BCD I
+                      00067 #define bcd_I_2         0xb1                    ; Zehner BCD I
+                      00068 #define bcd_I_3         0xb2                    ; Hunderter BCD I
+                      00069 #define bcd_I_4         0xb3                    ; Tausender BCD I
+                      00070 #define bcd_T_1         0xb4                    ; Einer BCD T
+                      00071 #define bcd_T_2         0xb5                    ; Zehner BCD T
+                      00072 #define bcd_temp        0xb6                    ; temporaerer bcd Speicher
+                      00073 
+                      00074 #define ad_temp         0xb8                    ; Temp Variable von ad_low und ad_high
+                      00075 #define ad_temp_l       0xba                    ; Temp der ad low
+                      00076 #define bcd_R_1         0xbb                    ; Einer BCD R
+                      00077 #define bcd_R_2         0xbc                    ; Zehner BCD R
+                      00078 #define bcd_R_3         0xbd                    ; Hunderter BCD R
+                      00079 #define bcd_R_4         0xbe                    ; Tausender BCD R
+                      00080 #define bcd_R_5         0xbf                    ; Zehn-Tausender BCD R
+                      00081 #define U_ist_1         0xc0                    ; aktuelle U Einer
+                      00082 #define U_ist_2         0xc1                    ; aktuelle U Zehner
+                      00083 #define U_ist_3         0xc2                    ; aktuelle U Hunderter
+                      00084 #define U_ist_4         0xc3                    ; aktuelle U Tausender
+                      00085 #define I_ist_1         0xc4                    ; aktuelle I Einer                      
+                      00086 #define I_ist_2         0xc5                    ; aktuelle I Zehner
+                      00087 #define I_ist_3         0xc6                    ; aktuelle I Hunderter
+                      00088 #define I_ist_4         0xc7                    ; aktuelle I Tausender
+                      00089 #define loop3           0xc8                    ; lange_pause loop
+                      00090 
+                      00091 
+                      00092 
+                      00093 #define mode_0          mode, 0
+                      00094 #define mode_U          mode, 1
+                      00095 #define mode_I          mode, 2
+                      00096 #define mode_P          mode, 3
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00097 #define mode_T          mode, 4
+                      00098 #define mode_R          mode, 5
+                      00099 
+                      00100 #define lcd_port        PORTD
+                      00101 #define lcd_enable      PORTD,2
+                      00102 #define lcd_rs          PORTD,0
+                      00103 #define lcd_rw          PORTD,1
+                      00104 #define lcd_tris        TRISD
+                      00105 
+                      00106 #define t2_relais       PORTC,1         ; Relais zur Spannungsmessung an/aus
+                      00107 #define t2_tris         TRISC,1
+                      00108 
+                      00109 #define t1_relais       PORTD,7         ; Relais zur Last an/aus
+                      00110 #define t1_tris         TRISD,7
+                      00111 
+                      00112 #define t3_luefter      PORTB,3         ; Lüfter an / aus
+                      00113 #define t3_tris         TRISB,3 
+                      00114 
+                      00115 #define TXD                     PORTC,6         ; Transmit Pin
+                      00116 #define RXD                     PORTC,7         ; Receive Pin
+                      00117 
+                      00118 #define int_tris        TRISB           ; Interrupt der Folientastatur
+                      00119 #define int4            PORTB,4         ; Taster-Interrupt 
+                      00120 #define int5            PORTB,5         ; Taster-Interrupt
+                      00121 
+                      00122 #define ad_tris         TRISA           
+                      00123 #define ad_port         PORTA           ; AD-Port
+                      00124 
+                      00125 #define baud0_tris      TRISC, 0
+                      00126 #define baud0_bit       PORTC, 0        ; 1. Bit der Baudrate
+                      00127 #define baud1_tris      TRISE, 0
+                      00128 #define baud1_bit       PORTE, 0        ; 2. Bit der Baudrate
+                      00129 
+                      00130 #define add0_tris       TRISE, 1
+                      00131 #define add0_bit        PORTE, 1        ; 1. Bit der Adresse
+                      00132 #define add1_tris       TRISE, 1
+                      00133 #define add1_bit        PORTE, 1        ; 2. Bit der Adresse
+                      00134 
+                      00135 
+                      00136 ;__________________________________________________________________________________
+                      00137 
+                      00138 ;**********************************************************************************
+                      00139 ;Programmcode:
+                      00140 ;**********************************************************************************
+000000                00141     org         0x00                 ; die Startadresse nach Reset ist 0, hier startet der PIC
+000000 EF84 F002      00142     goto        main                 ; Sprung zum Hauptprogramm
+                      00143 
+                      00144 ;**********************************************************************************
+                      00145 ;Interruptbehandlungsroutine
+                      00146 ;**********************************************************************************
+000008                00147         org             0x08                             ; die Startadresse des Interrupts
+                      00148 
+000008                00149 isr
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000008 6F84           00150         movwf   w_temp                                  ; Arbeitsregister retten
+00000A CFD8 F085      00151         movff   STATUS,  status_temp    ; Status retten
+00000E CFE0 F083      00152         movff   BSR,     bsr_temp               ; Bank retten
+000012 010F           00153         banksel RCREG
+                      00154         
+000014 BA9E           00155         btfsc   PIR1,   RCIF                    ; wenn RX int von RS232
+000016 EF2C F000      00156         goto    rs232_int                               ; RS232 Byte auswerten
+                      00157 
+00001A B2F2           00158         btfsc   INTCON, INT0IF                  ; wenn int0 auslöste
+00001C EFDE F001      00159         goto    isr_up                                  ; hochzählen
+                      00160 
+000020 B0F0           00161         btfsc   INTCON3, INT1IF                 ; wenn int1
+000022 EF3A F002      00162         goto    isr_down                                ; runterzählen
+                      00163 
+000026 B2F0           00164         btfsc   INTCON3, INT2IF                 ; wenn int2
+000028 EFCB F001      00165         goto    isr_mode                                ; moduswechsel
+                      00166 
+00002C B881           00167         btfsc   int4                                    ; wenn int4
+00002E EFD9 F001      00168         goto    isr_loc                                 ; 
+                      00169 
+000032 BA81           00170         btfsc   int5                                    ; wenn int5
+000034 EFC5 F001      00171         goto    isr_onoff                               ; 
+                      00172 
+000038                00173 isr_end
+000038 010F           00174         banksel INTCON
+00003A 9A9E           00175         bcf             PIR1,   RCIF    ; Receive Interrupt Flag löschen
+00003C 90F2           00176         bcf             INTCON, RBIF    ; Int-Flag löschen
+00003E 94F2           00177         bcf             INTCON, TMR0IF  ; Timer0-Flag löschen
+000040 92F2           00178         bcf             INTCON, INT0IF  ; External-Flag löschen
+000042 90F0           00179         bcf             INTCON3, INT1IF ; int1 flag löschen
+000044 92F0           00180         bcf             INTCON3, INT2IF ; int2 flag löschen
+000046 969E           00181         bcf             PIR1,   SSPIF   ; transmission flag
+000048 9C9E           00182         bcf             PIR1,   ADIF    ; AD-flag löschen
+00004A 9E9E           00183         bcf             PIR1,   PSPIF   ; parallel-slave flag löschen
+                      00184         
+00004C C083 FFE0      00185         movff   bsr_temp,       BSR     ; bsr wiederherstellen
+000050 5184           00186         movf    w_temp,         W               ; w wiederherstellen
+000052 C085 FFD8      00187         movff   status_temp, STATUS ; status wiederherstellen
+000056 0010           00188         retfie                                          ; Ende der ist
+                      00189 
+                      00190 ;**********************************************************************************
+                      00191 ; RS232 Schnittstelle: Empfangen und auswerten
+                      00192 ; Befehle: Iset, Uset, Rset, Rout, Iout, Uout, Tout, On, Off
+                      00193 ;**********************************************************************************
+000058                00194 rs232_int
+000058 010F           00195         banksel RCREG
+00005A 50AE           00196         movf    RCREG, w                        ; RS-232 Datenbyte entnehmen
+00005C 6AAE           00197         clrf    RCREG
+00005E 0100           00198         banksel rs232_byte0
+000060 6F96           00199         movwf   rs232_byte0                     ; frame abspeichern
+000062 0E00           00200         movlw   0x00
+000064 639F           00201         cpfseq  counter                         ; Addresse abfragen ?
+000066 EF3C F000      00202         goto    count_1
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00203         
+00006A 5195           00204         movf    address, w                      ; Adresse in w schreiben
+00006C 6396           00205         cpfseq  rs232_byte0                     ;
+00006E EF9F F000      00206         goto    discard                         ; alles verwerfen
+000072 2B9F           00207         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+000074 EFA1 F000      00208         goto    rs232_int_end
+                      00209 
+000078                00210 count_1
+000078 0E01           00211         movlw   0x01
+00007A 639F           00212         cpfseq  counter
+00007C EF45 F000      00213         goto    count_2
+000080 2B9F           00214         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+000082 5196           00215         movf    rs232_byte0, w          ;
+000084 6F97           00216         movwf   rs232_byte1
+000086 EFA1 F000      00217         goto    rs232_int_end           ;
+00008A                00218 count_2
+00008A 0E02           00219         movlw   0x02
+00008C 639F           00220         cpfseq  counter
+00008E EF56 F000      00221         goto    count_3
+000092 2B9F           00222         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+000094 5196           00223         movf    rs232_byte0, w          ;
+000096 6F98           00224         movwf   rs232_byte2                     ;
+000098 0E4E           00225         movlw   'N'
+00009A 6398           00226         cpfseq  rs232_byte2
+00009C EFA1 F000      00227         goto    rs232_int_end           ;
+0000A0 8681           00228         bsf             t3_luefter                      ; Luefter anschalten zur Kuehlung
+0000A2 8E83           00229         bsf             t1_relais                       ; Relais 1 schalten !! Last freigeben
+0000A4 0100           00230         banksel rs232_byte0
+0000A6 6B96           00231         clrf    rs232_byte0
+0000A8 EFA5 F000      00232         goto    verarbeiten
+0000AC                00233 count_3
+0000AC 0E03           00234         movlw   0x03
+0000AE 639F           00235         cpfseq  counter
+0000B0 EF66 F000      00236         goto    count_4
+0000B4 2B9F           00237         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+0000B6 5196           00238         movf    rs232_byte0, w          ;
+0000B8 6F99           00239         movwf   rs232_byte3                     ;
+0000BA 0E46           00240         movlw   'F'
+0000BC 6399           00241         cpfseq  rs232_byte3
+0000BE EFA1 F000      00242         goto    rs232_int_end           ;
+0000C2 9E83           00243         bcf             t1_relais                       ; Relais 1 ausschalten !! Last aus
+0000C4 0100           00244         banksel rs232_byte0
+0000C6 6B96           00245         clrf    rs232_byte0
+0000C8 EFA5 F000      00246         goto    verarbeiten                     ;
+0000CC                00247 count_4
+0000CC 0E04           00248         movlw   0x04
+0000CE 639F           00249         cpfseq  counter
+0000D0 EF74 F000      00250         goto    count_5
+0000D4 2B9F           00251         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+0000D6 5196           00252         movf    rs232_byte0, w          ;
+0000D8 6F9A           00253         movwf   rs232_byte4                     ;
+0000DA 0E75           00254         movlw   'u'
+0000DC 6399           00255         cpfseq  rs232_byte3     
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0000DE EFA1 F000      00256         goto    rs232_int_end           ;
+0000E2 6B96           00257         clrf    rs232_byte0
+0000E4 EFA5 F000      00258         goto    verarbeiten
+0000E8                00259 count_5
+0000E8 0E05           00260         movlw   0x05
+0000EA 639F           00261         cpfseq  counter
+0000EC EF7D F000      00262         goto    count_6
+0000F0 2B9F           00263         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+0000F2 5196           00264         movf    rs232_byte0, w          ;
+0000F4 6F9B           00265         movwf   rs232_byte5                     ;
+0000F6 EFA1 F000      00266         goto    rs232_int_end           ;
+0000FA                00267 count_6
+0000FA 0E06           00268         movlw   0x06
+0000FC 639F           00269         cpfseq  counter
+0000FE EF86 F000      00270         goto    count_7
+000102 2B9F           00271         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+000104 5196           00272         movf    rs232_byte0, w          ;
+000106 6F9C           00273         movwf   rs232_byte6                     ;
+000108 EFA1 F000      00274         goto    rs232_int_end           ;
+00010C                00275 count_7
+00010C 0E07           00276         movlw   0x07
+00010E 639F           00277         cpfseq  counter
+000110 EF8F F000      00278         goto    count_8
+000114 2B9F           00279         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+000116 5196           00280         movf    rs232_byte0, w          ;
+000118 6F9D           00281         movwf   rs232_byte7                     ;
+00011A EFA1 F000      00282         goto    rs232_int_end           ;
+00011E                00283 count_8
+00011E 0E08           00284         movlw   0x08
+000120 639F           00285         cpfseq  counter
+000122 EF98 F000      00286         goto    count_9
+000126 2B9F           00287         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+000128 5196           00288         movf    rs232_byte0, w          ;
+00012A 6F9E           00289         movwf   rs232_byte8                     ;
+00012C EFA1 F000      00290         goto    rs232_int_end           ;
+000130                00291 count_9
+000130 0E09           00292         movlw   0x09
+000132 639F           00293         cpfseq  counter
+000134 EF9F F000      00294         goto    discard
+000138 2B9F           00295         incf    counter, 1                      ; Bytezähler um 1 erhöhen
+00013A EFA1 F000      00296         goto    rs232_int_end           ;
+                      00297 
+00013E                00298 discard
+00013E 0100           00299         banksel counter
+000140 6B9F           00300         clrf    counter
+                      00301 
+000142                00302 rs232_int_end
+000142 0E0A           00303         movlw   0x0a
+000144 639F           00304         cpfseq  counter
+000146 EF1C F000      00305         goto    isr_end                         ; Ende der isr
+                      00306 
+00014A                00307 verarbeiten
+00014A 5197           00308         movf    rs232_byte1, w          ; zur Bestätigung
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00014C ECC3 F004      00309         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+000150 5198           00310         movf    rs232_byte2, w          ; zur Bestätigung
+000152 ECC3 F004      00311         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+000156 5199           00312         movf    rs232_byte3, w          ; zur Bestätigung
+000158 ECC3 F004      00313         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+00015C 519A           00314         movf    rs232_byte4, w          ; zur Bestätigung
+00015E ECC3 F004      00315         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+000162 519B           00316         movf    rs232_byte5, w          ; zur Bestätigung
+000164 ECC3 F004      00317         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+000168 519C           00318         movf    rs232_byte6, w          ; zur Bestätigung
+00016A ECC3 F004      00319         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+00016E 519D           00320         movf    rs232_byte7, w          ; zur Bestätigung
+000170 ECC3 F004      00321         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+000174 519E           00322         movf    rs232_byte8, w          ; zur Bestätigung
+000176 ECC3 F004      00323         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+00017A 5196           00324         movf    rs232_byte0, w          ; zur Bestätigung
+00017C ECC3 F004      00325         call    rs232_ausgabe           ; gebe Daten an RS232 aus
+                      00326         
+000180                00327 auswertung
+000180 0100           00328         banksel rs232_byte1
+000182 0E49           00329         movlw   'I'
+000184 6397           00330         cpfseq  rs232_byte1
+000186 EFD1 F000      00331         goto    not_I
+00018A 0E73           00332         movlw   's'
+00018C 6398           00333         cpfseq  rs232_byte2
+00018E EFCD F000      00334         goto    not_Iset
+000192 EC15 F001      00335         call    I_set
+000196 EF09 F001      00336         goto    speicher_freigeben
+00019A                00337 not_Iset
+00019A EC26 F001      00338         call    I_out
+00019E EF09 F001      00339         goto    speicher_freigeben
+0001A2                00340 not_I
+0001A2 0E55           00341         movlw   'U'
+0001A4 6397           00342         cpfseq  rs232_byte1
+0001A6 EFE1 F000      00343         goto    not_IU
+0001AA 0E73           00344         movlw   's'
+0001AC 6398           00345         cpfseq  rs232_byte2
+0001AE EFDD F000      00346         goto    not_Uset
+0001B2 EC3B F001      00347         call    U_set
+0001B6 EF09 F001      00348         goto    speicher_freigeben
+0001BA                00349 not_Uset
+0001BA EC4C F001      00350         call    U_out
+0001BE EF09 F001      00351         goto    speicher_freigeben
+0001C2                00352 not_IU
+0001C2 0E52           00353         movlw   'R'
+0001C4 6397           00354         cpfseq  rs232_byte1
+0001C6 EFF1 F000      00355         goto    not_IUR
+0001CA 0E73           00356         movlw   's'
+0001CC 6398           00357         cpfseq  rs232_byte2
+0001CE EFED F000      00358         goto    not_Rset
+0001D2 EC61 F001      00359         call    R_set
+0001D6 EF09 F001      00360         goto    speicher_freigeben
+0001DA                00361 not_Rset
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  8
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0001DA EC76 F001      00362         call    R_out
+0001DE EF09 F001      00363         goto    speicher_freigeben
+0001E2                00364 not_IUR
+0001E2 0E50           00365         movlw   'P'
+0001E4 6397           00366         cpfseq  rs232_byte1
+0001E6 EFFD F000      00367         goto    not_IURP
+0001EA 0E6F           00368         movlw   'o'
+0001EC 6398           00369         cpfseq  rs232_byte2
+0001EE EF09 F001      00370         goto    speicher_freigeben
+0001F2 EC8B F001      00371         call    P_out
+0001F6 EF09 F001      00372         goto    speicher_freigeben
+0001FA                00373 not_IURP
+0001FA 0E54           00374         movlw   'T'
+0001FC 6397           00375         cpfseq  rs232_byte1
+0001FE EF09 F001      00376         goto    speicher_freigeben
+000202 0E6F           00377         movlw   'o'
+000204 6398           00378         cpfseq  rs232_byte2
+000206 EF09 F001      00379         goto    speicher_freigeben
+00020A ECB7 F001      00380         call    T_out
+00020E EF09 F001      00381         goto    speicher_freigeben      
+                      00382 
+000212                00383 speicher_freigeben
+000212 0100           00384         banksel rs232_byte0
+000214 6B96           00385         clrf    rs232_byte0
+000216 6B97           00386         clrf    rs232_byte1     
+000218 6B98           00387         clrf    rs232_byte2     
+00021A 6B99           00388         clrf    rs232_byte3     
+00021C 6B9A           00389         clrf    rs232_byte4     
+00021E 6B9B           00390         clrf    rs232_byte5     
+000220 6B9C           00391         clrf    rs232_byte6     
+000222 6B9D           00392         clrf    rs232_byte7     
+000224 6B9E           00393         clrf    rs232_byte8     
+000226 EF9F F000      00394         goto    discard                         ; counter löschen
+                      00395 
+00022A                00396 I_set                                                   ; Strombegrenzung einstellen
+00022A 0100           00397         banksel rs232_byte5
+00022C 519B           00398         movf    rs232_byte5, w
+00022E 0100           00399         banksel bcd_I_4
+000230 6FB3           00400         movwf   bcd_I_4
+000232 0100           00401         banksel rs232_byte6
+000234 519C           00402         movf    rs232_byte6, w
+000236 0100           00403         banksel bcd_I_3
+000238 6FB2           00404         movwf   bcd_I_3
+00023A 0100           00405         banksel rs232_byte8
+00023C 519E           00406         movf    rs232_byte8, w
+00023E 0100           00407         banksel bcd_I_2
+000240 6FB1           00408         movwf   bcd_I_2
+000242 0100           00409         banksel rs232_byte0
+000244 5196           00410         movf    rs232_byte0, w
+000246 0100           00411         banksel bcd_I_1
+000248 6FB0           00412         movwf   bcd_I_1 
+00024A 0012           00413         return
+                      00414 
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE  9
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00024C                00415 I_out                                                   ; aktueller Stromwert ausgeben
+00024C 0100           00416         banksel I_ist_4
+00024E 51C7           00417         movf    I_ist_4, w
+000250 0930           00418         iorlw   0x30
+000252 ECC3 F004      00419         call    rs232_ausgabe
+000256 0100           00420         banksel I_ist_3
+000258 51C6           00421         movf    I_ist_3, w
+00025A 0930           00422         iorlw   0x30
+00025C ECC3 F004      00423         call    rs232_ausgabe
+000260 0100           00424         banksel I_ist_2
+000262 51C5           00425         movf    I_ist_2, w
+000264 0930           00426         iorlw   0x30
+000266 ECC3 F004      00427         call    rs232_ausgabe
+00026A 0100           00428         banksel I_ist_1
+00026C 51C4           00429         movf    I_ist_1, w
+00026E 0930           00430         iorlw   0x30
+000270 ECC3 F004      00431         call    rs232_ausgabe
+000274 0012           00432         return
+                      00433 
+000276                00434 U_set                                                   ; Maximale vorgesehene Spannung wird festgelegt
+000276 0100           00435         banksel rs232_byte5
+000278 519B           00436         movf    rs232_byte5, w
+00027A 0100           00437         banksel bcd_U_4
+00027C 6FAF           00438         movwf   bcd_U_4
+00027E 0100           00439         banksel rs232_byte6
+000280 519C           00440         movf    rs232_byte6, w
+000282 0100           00441         banksel bcd_U_3
+000284 6FAE           00442         movwf   bcd_U_3
+000286 0100           00443         banksel rs232_byte8
+000288 519E           00444         movf    rs232_byte8, w
+00028A 0100           00445         banksel bcd_U_2
+00028C 6FAD           00446         movwf   bcd_U_2
+00028E 0100           00447         banksel rs232_byte0
+000290 5196           00448         movf    rs232_byte0, w
+000292 0100           00449         banksel bcd_U_1
+000294 6FAC           00450         movwf   bcd_U_1 
+000296 0012           00451         return
+                      00452 
+000298                00453 U_out                                                   ; Aktuelle Spannung wird ausgegeben
+000298 0100           00454         banksel U_ist_4
+00029A 51C3           00455         movf    U_ist_4, w
+00029C 0930           00456         iorlw   0x30
+00029E ECC3 F004      00457         call    rs232_ausgabe
+0002A2 0100           00458         banksel U_ist_3
+0002A4 51C2           00459         movf    U_ist_3, w
+0002A6 0930           00460         iorlw   0x30
+0002A8 ECC3 F004      00461         call    rs232_ausgabe
+0002AC 0100           00462         banksel U_ist_2
+0002AE 51C1           00463         movf    U_ist_2, w
+0002B0 0930           00464         iorlw   0x30
+0002B2 ECC3 F004      00465         call    rs232_ausgabe
+0002B6 0100           00466         banksel U_ist_1
+0002B8 51C0           00467         movf    U_ist_1, w
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 10
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0002BA 0930           00468         iorlw   0x30
+0002BC ECC3 F004      00469         call    rs232_ausgabe
+0002C0 0012           00470         return
+                      00471 
+0002C2                00472 R_set                                                   ; Widerstandswert wird festegelegt
+0002C2 0100           00473         banksel rs232_byte5
+0002C4 519B           00474         movf    rs232_byte5, w
+0002C6 0100           00475         banksel bcd_R_5
+0002C8 6FBF           00476         movwf   bcd_R_5
+0002CA 0100           00477         banksel rs232_byte6
+0002CC 519C           00478         movf    rs232_byte6, w
+0002CE 0100           00479         banksel bcd_R_4
+0002D0 6FBE           00480         movwf   bcd_R_4
+0002D2 0100           00481         banksel rs232_byte7
+0002D4 519D           00482         movf    rs232_byte7, w
+0002D6 0100           00483         banksel bcd_R_3
+0002D8 6FBD           00484         movwf   bcd_R_3
+0002DA 0100           00485         banksel rs232_byte8
+0002DC 519E           00486         movf    rs232_byte8, w
+0002DE 0100           00487         banksel bcd_R_2
+0002E0 6FBC           00488         movwf   bcd_R_2
+0002E2 0100           00489         banksel rs232_byte0
+0002E4 5196           00490         movf    rs232_byte0, w
+0002E6 0100           00491         banksel bcd_R_1
+0002E8 6FBB           00492         movwf   bcd_R_1
+0002EA 0012           00493         return
+                      00494 
+0002EC                00495 R_out                                                   ; Aktueller eingestellter Widerstandswert wird a
+                            usgegeben
+0002EC 0100           00496         banksel bcd_R_5
+0002EE 51BF           00497         movf    bcd_R_5, w
+0002F0 ECC3 F004      00498         call    rs232_ausgabe
+0002F4 0100           00499         banksel bcd_R_4
+0002F6 51BE           00500         movf    bcd_R_4, w
+0002F8 ECC3 F004      00501         call    rs232_ausgabe
+0002FC 0100           00502         banksel bcd_R_3
+0002FE 51BD           00503         movf    bcd_R_3, w
+000300 ECC3 F004      00504         call    rs232_ausgabe
+000304 0100           00505         banksel bcd_R_2
+000306 51BC           00506         movf    bcd_R_2, w
+000308 ECC3 F004      00507         call    rs232_ausgabe
+00030C 0100           00508         banksel bcd_R_1
+00030E 51BB           00509         movf    bcd_R_1, w
+000310 ECC3 F004      00510         call    rs232_ausgabe
+000314 0012           00511         return
+                      00512 
+000316                00513 P_out                                                   ; Aktuelle Leistung wird ausgegeben
+000316 0100           00514         banksel I_ist_4
+000318 51C7           00515         movf    I_ist_4, w
+00031A 0930           00516         iorlw   0x30
+00031C ECC3 F004      00517         call    rs232_ausgabe
+000320 0100           00518         banksel I_ist_3
+000322 51C6           00519         movf    I_ist_3, w
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 11
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000324 0930           00520         iorlw   0x30
+000326 ECC3 F004      00521         call    rs232_ausgabe
+00032A 0100           00522         banksel I_ist_2
+00032C 51C5           00523         movf    I_ist_2, w
+00032E 0930           00524         iorlw   0x30
+000330 ECC3 F004      00525         call    rs232_ausgabe
+000334 0100           00526         banksel I_ist_1
+000336 51C4           00527         movf    I_ist_1, w
+000338 0930           00528         iorlw   0x30
+00033A ECC3 F004      00529         call    rs232_ausgabe
+00033E 0E2A           00530         movlw   '*'
+000340 ECC3 F004      00531         call    rs232_ausgabe
+000344 0100           00532         banksel U_ist_4
+000346 51C3           00533         movf    U_ist_4, w
+000348 0930           00534         iorlw   0x30
+00034A ECC3 F004      00535         call    rs232_ausgabe
+00034E 0100           00536         banksel U_ist_3
+000350 51C2           00537         movf    U_ist_3, w
+000352 0930           00538         iorlw   0x30
+000354 ECC3 F004      00539         call    rs232_ausgabe
+000358 0100           00540         banksel U_ist_2
+00035A 51C1           00541         movf    U_ist_2, w
+00035C 0930           00542         iorlw   0x30
+00035E ECC3 F004      00543         call    rs232_ausgabe
+000362 0100           00544         banksel U_ist_1
+000364 51C0           00545         movf    U_ist_1, w
+000366 0930           00546         iorlw   0x30
+000368 ECC3 F004      00547         call    rs232_ausgabe
+00036C 0012           00548         return
+                      00549 
+00036E                00550 T_out                                                   ; Aktuelle Temeratur wird ausgegeben
+00036E 0100           00551         banksel bcd_T_2
+000370 51B5           00552         movf    bcd_T_2, w
+000372 0930           00553         iorlw   0x30
+000374 ECC3 F004      00554         call    rs232_ausgabe
+000378 0100           00555         banksel bcd_T_1
+00037A 51B4           00556         movf    bcd_T_1, w
+00037C 0930           00557         iorlw   0x30
+00037E ECC3 F004      00558         call    rs232_ausgabe
+000382 0E43           00559         movlw   'C'
+000384 ECC3 F004      00560         call    rs232_ausgabe
+000388 0012           00561         return
+                      00562 ;__________________________________________________________________________________
+                      00563 
+                      00564 ;**********************************************************************************
+                      00565 ; Interrupt der Taster an der Frontfolie
+                      00566 ;**********************************************************************************
+00038A                00567 isr_onoff                                                       ; An-Ausschalten mit der Frontplatte
+                      00568 ;       bsf             t3_luefter                              ; Luefter zur Kuehlung anschalten       
+                                                    ****************************** TEST !!!
+00038A 1E82           00569         comf    t2_relais                               ; 
+00038C 0E64           00570         movlw   .100
+00038E EC84 F004      00571         call    pause                                   ; Taster entprellen
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 12
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000392 EF1C F000      00572         goto    isr_end
+                      00573 
+000396                00574 isr_mode                                                        ; Modus Auswahl der Frontplatte
+000396 0100           00575         banksel mode
+000398 BBA1           00576         btfsc   mode_R
+00039A EFD2 F001      00577         goto    mode_reset
+00039E 37A1           00578         rlcf    mode, 1
+0003A0 EFD4 F001      00579         goto    isr_mode_end
+0003A4                00580 mode_reset                                                      
+0003A4 6BA1           00581         clrf    mode
+0003A6 81A1           00582         bsf             mode_0
+0003A8                00583 isr_mode_end            
+0003A8 0E64           00584         movlw   .100
+0003AA EC84 F004      00585         call    pause                                   ; Taster entprellen     
+0003AE EF1C F000      00586         goto    isr_end
+                      00587 
+0003B2                00588 isr_loc                                                         ; loc Umschaltung auf ein Locales Event
+0003B2 0E64           00589         movlw   .100
+0003B4 EC84 F004      00590         call    pause                                   ; Taster entprellen                             
+0003B8 EF1C F000      00591         goto    isr_end
+                      00592 ;*******************************************************************************************
+0003BC                00593 isr_up                                                          ; hochzählen / Inkrementieren
+0003BC 0100           00594         banksel mode
+0003BE B3A1           00595         btfsc   mode_U
+0003C0 EFEA F001      00596         goto    U_up
+0003C4 B5A1           00597         btfsc   mode_I
+0003C6 EF03 F002      00598         goto    I_up
+0003CA BBA1           00599         btfsc   mode_R
+0003CC EF1C F002      00600         goto    R_up
+0003D0 EF35 F002      00601         goto    isr_up_end
+                      00602         
+0003D4                00603 U_up
+0003D4 0100           00604         banksel bcd_U_3
+0003D6 0E39           00605         movlw   0x39
+0003D8 63AE           00606         cpfseq  bcd_U_3
+0003DA EFF7 F001      00607         goto    inc_U_3
+0003DE 0E30           00608         movlw   0x30
+0003E0 6FAE           00609         movwf   bcd_U_3
+0003E2 0E33           00610         movlw   0x33
+0003E4 63AF           00611         cpfseq  bcd_U_4
+0003E6 EF00 F002      00612         goto    inc_U_4
+0003EA EF35 F002      00613         goto    isr_up_end
+0003EE                00614 inc_U_3
+0003EE 0E33           00615         movlw   0x33
+0003F0 63AF           00616         cpfseq  bcd_U_4
+0003F2 EFFD F001      00617         goto    inc_U_3_go
+0003F6 EF35 F002      00618         goto    isr_up_end
+0003FA                00619 inc_U_3_go
+0003FA 2BAE           00620         incf    bcd_U_3
+0003FC EF35 F002      00621         goto    isr_up_end
+000400                00622 inc_U_4
+000400 2BAF           00623         incf    bcd_U_4
+000402 EF35 F002      00624         goto    isr_up_end
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 13
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00625 
+000406                00626 I_up
+000406 0100           00627         banksel bcd_I_2
+000408 0E39           00628         movlw   0x39
+00040A 63B1           00629         cpfseq  bcd_I_2
+00040C EF10 F002      00630         goto    inc_I_2
+000410 0E30           00631         movlw   0x30
+000412 6FB1           00632         movwf   bcd_I_2
+000414 0E39           00633         movlw   0x39
+000416 63B2           00634         cpfseq  bcd_I_3
+000418 EF19 F002      00635         goto    inc_I_3
+00041C EF35 F002      00636         goto    isr_up_end
+000420                00637 inc_I_2
+000420 0E39           00638         movlw   0x39
+000422 63B2           00639         cpfseq  bcd_I_3
+000424 EF16 F002      00640         goto    inc_I_2_go
+000428 EF35 F002      00641         goto    isr_up_end
+00042C                00642 inc_I_2_go
+00042C 2BB1           00643         incf    bcd_I_2
+00042E EF35 F002      00644         goto    isr_up_end
+000432                00645 inc_I_3
+000432 2BB2           00646         incf    bcd_I_3
+000434 EF35 F002      00647         goto    isr_up_end
+                      00648 
+000438                00649 R_up
+000438 0100           00650         banksel bcd_R_2
+00043A 0E39           00651         movlw   0x39
+00043C 63BC           00652         cpfseq  bcd_R_2
+00043E EF29 F002      00653         goto    inc_R_2
+000442 0E30           00654         movlw   0x30
+000444 6FBC           00655         movwf   bcd_R_2
+000446 0E39           00656         movlw   0x39
+000448 63BD           00657         cpfseq  bcd_R_3
+00044A EF32 F002      00658         goto    inc_R_3
+00044E EF35 F002      00659         goto    isr_up_end
+000452                00660 inc_R_2
+000452 0E39           00661         movlw   0x39
+000454 63BD           00662         cpfseq  bcd_R_3
+000456 EF2F F002      00663         goto    inc_R_2_go
+00045A EF35 F002      00664         goto    isr_up_end
+00045E                00665 inc_R_2_go
+00045E 2BBC           00666         incf    bcd_R_2
+000460 EF35 F002      00667         goto    isr_up_end
+000464                00668 inc_R_3
+000464 2BBD           00669         incf    bcd_R_3
+000466 EF35 F002      00670         goto    isr_up_end
+                      00671 
+00046A                00672 isr_up_end
+00046A 0E64           00673         movlw   .100
+00046C EC84 F004      00674         call    pause                                   ; Taster entprellen     
+000470 EF1C F000      00675         goto    isr_end
+                      00676 ;*************************************************************************************
+000474                00677 isr_down                                                        ; runterzählen / Dekrementieren
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 14
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000474 0100           00678         banksel mode
+000476 B3A1           00679         btfsc   mode_U
+000478 EF46 F002      00680         goto    U_down
+00047C B5A1           00681         btfsc   mode_I
+00047E EF59 F002      00682         goto    I_down
+000482 BBA1           00683         btfsc   mode_R
+000484 EF6C F002      00684         goto    R_down
+000488 EF7F F002      00685         goto    isr_down_end
+                      00686         
+00048C                00687 U_down
+00048C 0100           00688         banksel bcd_U_3
+00048E 0E30           00689         movlw   0x30
+000490 63AE           00690         cpfseq  bcd_U_3
+000492 EF51 F002      00691         goto    dec_U_3
+000496 0E30           00692         movlw   0x30
+000498 63AF           00693         cpfseq  bcd_U_4
+00049A EF54 F002      00694         goto    dec_U_4
+00049E EF35 F002      00695         goto    isr_up_end
+0004A2                00696 dec_U_3
+0004A2 07AE           00697         decf    bcd_U_3
+0004A4 EF35 F002      00698         goto    isr_up_end
+0004A8                00699 dec_U_4
+0004A8 0E39           00700         movlw   0x39
+0004AA 6FAE           00701         movwf   bcd_U_3
+0004AC 07AF           00702         decf    bcd_U_4
+0004AE EF7F F002      00703         goto    isr_down_end
+                      00704 
+0004B2                00705 I_down
+0004B2 0100           00706         banksel bcd_I_2
+0004B4 0E30           00707         movlw   0x30
+0004B6 63B1           00708         cpfseq  bcd_I_2
+0004B8 EF64 F002      00709         goto    dec_I_2
+0004BC 0E30           00710         movlw   0x30
+0004BE 63B2           00711         cpfseq  bcd_I_3
+0004C0 EF67 F002      00712         goto    dec_I_3
+0004C4 EF35 F002      00713         goto    isr_up_end
+0004C8                00714 dec_I_2
+0004C8 07B1           00715         decf    bcd_I_2
+0004CA EF35 F002      00716         goto    isr_up_end
+0004CE                00717 dec_I_3
+0004CE 0E39           00718         movlw   0x39
+0004D0 6FB1           00719         movwf   bcd_I_2
+0004D2 07B2           00720         decf    bcd_I_3
+0004D4 EF7F F002      00721         goto    isr_down_end
+                      00722 
+0004D8                00723 R_down
+0004D8 0100           00724         banksel bcd_R_2
+0004DA 0E30           00725         movlw   0x30
+0004DC 63BC           00726         cpfseq  bcd_R_2
+0004DE EF77 F002      00727         goto    dec_R_2
+0004E2 0E30           00728         movlw   0x30
+0004E4 63BD           00729         cpfseq  bcd_R_3
+0004E6 EF7A F002      00730         goto    dec_R_3
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 15
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0004EA EF35 F002      00731         goto    isr_up_end
+0004EE                00732 dec_R_2
+0004EE 07BC           00733         decf    bcd_R_2
+0004F0 EF35 F002      00734         goto    isr_up_end
+0004F4                00735 dec_R_3
+0004F4 0E39           00736         movlw   0x39
+0004F6 6FBC           00737         movwf   bcd_R_2
+0004F8 07BD           00738         decf    bcd_R_3
+0004FA EF7F F002      00739         goto    isr_down_end
+                      00740 
+0004FE                00741 isr_down_end
+0004FE 0E64           00742         movlw   .100
+000500 EC84 F004      00743         call    pause                                   ; Taster entprellen     
+000504 EF1C F000      00744         goto    isr_end 
+                      00745 ;__________________________________________________________________________________
+                      00746 
+                      00747 
+                      00748 ;**********************************************************************************
+                      00749 ;Hauptprogramm
+                      00750 ;**********************************************************************************
+000508                00751 main
+000508 EC6F F003      00752         call    init_system                     ; PIC wird initialisiert
+00050C ECC7 F003      00753         call    lcd_init                        ; LCD wird initialisiert
+                      00754 
+000510 EC28 F003      00755         call    dip_abfrage                     ; Baudrate und Adresse werden abgefragt
+                      00756 
+000514                00757 loop                                                    ; Endlosschleife
+000514 EC92 F002      00758         call            ad_wandeln              ; AD-Wandlung
+000518 ECDF F004      00759         call            mode_auswahl    ; Mode-Auswahl der Frontplatte
+00051C EC6D F004      00760         call            lange_pause             ; 1s Pause
+                      00761                 
+000520 EF8A F002      00762         goto            loop
+                      00763 ;__________________________________________________________________________________
+                      00764 
+                      00765 ;**********************************************************************************
+                      00766 ; AD-Wandlung zum Messen von Spannung, Strom und Temperatur
+                      00767 ;**********************************************************************************
+000524                00768 ad_wandeln
+000524 010F           00769         banksel ADCON0
+000526 94C2           00770         bcf     ADCON0, CHS0
+000528 96C2           00771         bcf     ADCON0, CHS1
+00052A 98C2           00772         bcf     ADCON0, CHS2
+00052C 9AC2           00773         bcf     ADCON0, CHS3            ; Channel 0 Spannungs-Messung an RA0
+00052E ECA0 F002      00774         call    ad_wandeln_go
+                      00775 
+000532 ECC6 F002      00776         call    bcd_wandeln_U           ; Wandelt die AD Messwerte in BCD um
+                      00777 
+000536 EC26 F003      00778         call    bcd_wandeln_I           ; Wandelt die AD Messwerte in BCD um
+                      00779 
+00053A EC27 F003      00780         call    bcd_wandeln_T           ; Wandelt die AD Messwerte in BCD um
+                      00781         
+00053E 0012           00782         return
+                      00783 
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 16
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000540                00784 ad_wandeln_go
+000540 0EFF           00785         movlw   0xff
+000542 EC84 F004      00786         call    pause                           ; Pause bei Channel Wechsel sowie Messung
+000546 010F           00787         banksel ADCON0
+000548 82C2           00788         bsf             ADCON0, GO                      ; startet den AD Wandler
+00054A                00789 warten
+00054A B2C2           00790         btfsc   ADCON0, GO
+00054C EFA5 F002      00791         goto    warten                          ; wartet bis AD-Wandlung fertig ist
+                      00792 
+000550 0EFF           00793         movlw   0xff
+000552 EC84 F004      00794         call    pause
+                      00795 
+000556 010F           00796         banksel ADRESL
+000558 50C3           00797         movf    ADRESL, w                       ; low Byte der Wandlung in w
+00055A 0100           00798         banksel ad_low
+00055C 6F93           00799         movwf   ad_low
+                      00800 
+00055E 5193           00801         movf    ad_low, w                       ; *************************************************** TE
+                            ST!!
+000560 0B0F           00802         andlw   0x0f
+000562 0930           00803         iorlw   0x30
+000564 ECC3 F004      00804         call    rs232_ausgabe
+                      00805 
+000568 3993           00806         swapf   ad_low, w
+00056A 0B0F           00807         andlw   0x0f
+00056C 0930           00808         iorlw   0x30
+00056E ECC3 F004      00809         call    rs232_ausgabe
+                      00810         
+                      00811 
+000572 010F           00812         banksel ADRESH
+000574 50C4           00813         movf    ADRESH, w                       ; high Byte der Wandlung in w
+000576 0100           00814         banksel ad_high
+000578 0B03           00815         andlw   0x03                            ; maskieren, da nur die letzten beiden Bits info enthalt
+                            en
+00057A 6F94           00816         movwf   ad_high
+                      00817         
+00057C 5194           00818         movf    ad_high, w                      ; ******************************************************
+                            ****** TEST !!!
+00057E 0930           00819         iorlw   0x30
+000580 ECC3 F004      00820         call    rs232_ausgabe
+000584 0E58           00821         movlw   'X'
+000586 ECC3 F004      00822         call    rs232_ausgabe
+00058A 0012           00823         return  
+                      00824 ;__________________________________________________________________________________
+                      00825 
+                      00826 
+                      00827 ;**********************************************************************************
+                      00828 ; BCD-Wandlung der gemessenen AD-Werte
+                      00829 ;**********************************************************************************
+00058C                00830 bcd_wandeln_U
+00058C 0100           00831         banksel U_ist_1
+00058E 6BC0           00832         clrf    U_ist_1
+000590 6BC1           00833         clrf    U_ist_2
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 17
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000592 6BC2           00834         clrf    U_ist_3
+000594 6BC3           00835         clrf    U_ist_4                         ; löschen der alten Werte
+000596                00836 bcd_wandeln_multi
+000596 0100           00837         banksel ad_low
+000598 5193           00838         movf    ad_low, w
+00059A 0D03           00839         mullw   0x03
+00059C 010F           00840         banksel PRODL
+00059E 50F3           00841         movf    PRODL, w
+0005A0 0100           00842         banksel ad_low
+0005A2 6F93           00843         movwf   ad_low
+0005A4 010F           00844         banksel PRODH
+0005A6 50F4           00845         movf    PRODH, w
+0005A8 0100           00846         banksel ad_temp_l
+0005AA 6FBA           00847         movwf   ad_temp_l
+0005AC 0100           00848         banksel ad_high
+0005AE 5194           00849         movf    ad_high, w
+0005B0 0D03           00850         mullw   0x03
+0005B2 010F           00851         banksel PRODL
+0005B4 50F3           00852         movf    PRODL, w
+0005B6 0100           00853         banksel ad_high
+0005B8 6F94           00854         movwf   ad_high
+0005BA 0100           00855         banksel ad_temp_l
+0005BC 51BA           00856         movf    ad_temp_l, w
+0005BE 0100           00857         banksel ad_high
+0005C0 2794           00858         addwf   ad_high, 1              
+0005C2                00859 bcd_wandeln_U1
+0005C2 010F           00860         banksel STATUS
+0005C4 98D8           00861         bcf             STATUS, N                       ; negative bit löschen
+0005C6 0100           00862         banksel ad_low
+0005C8 5193           00863         movf    ad_low, w
+0005CA 080A           00864         sublw   0x0a                            ; subtrahiert 10 vom W Register
+0005CC 010F           00865         banksel STATUS
+0005CE B8D8           00866         btfsc   STATUS, N
+0005D0 EF10 F003      00867         goto    bcd_wandeln_U2          ; Wenn negatives Ergebnis ->
+0005D4 0100           00868         banksel ad_low
+0005D6 6F93           00869         movwf   ad_low
+0005D8 0E00           00870         movlw   0x00
+0005DA 6393           00871         cpfseq  ad_low
+0005DC EFF6 F002      00872         goto    inc_bcd_U
+0005E0 0E00           00873         movlw   0x00
+0005E2 6394           00874         cpfseq  ad_high
+0005E4 EFF6 F002      00875         goto    inc_bcd_U
+0005E8 EF25 F003      00876         goto    bcd_wandeln_U_end
+0005EC                00877 inc_bcd_U
+0005EC 0E09           00878         movlw   0x09
+0005EE 63C1           00879         cpfseq  U_ist_2
+0005F0 EF0D F003      00880         goto    inc_bcd_U_2
+0005F4 6BC1           00881         clrf    U_ist_2
+0005F6 0E09           00882         movlw   0x09
+0005F8 63C2           00883         cpfseq  U_ist_3
+0005FA EF0A F003      00884         goto    inc_bcd_U_3
+0005FE 6BC2           00885         clrf    U_ist_3
+000600 0E09           00886         movlw   0x09
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 18
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000602 63C3           00887         cpfseq  U_ist_4
+000604 EF07 F003      00888         goto    inc_bcd_U_4
+000608 6BC3           00889         clrf    U_ist_4
+00060A EFE1 F002      00890         goto    bcd_wandeln_U1
+                      00891 
+00060E                00892 inc_bcd_U_4
+00060E 2BC3           00893         incf    U_ist_4                         ; 4. Stelle von BCD inkrementieren
+000610 EFE1 F002      00894         goto    bcd_wandeln_U1
+000614                00895 inc_bcd_U_3     
+000614 2BC2           00896         incf    U_ist_3                         ; 3. Stelle von BCD inkrementieren
+000616 EFE1 F002      00897         goto    bcd_wandeln_U1
+00061A                00898 inc_bcd_U_2     
+00061A 2BC1           00899         incf    U_ist_2                         ; 2.Stelle von BCD inkrementieren
+00061C EFE1 F002      00900         goto    bcd_wandeln_U1
+                      00901 
+000620                00902 bcd_wandeln_U2
+000620 0100           00903         banksel ad_temp
+000622 6FB8           00904         movwf   ad_temp
+000624 0100           00905         banksel ad_high
+000626 0E00           00906         movlw   0x00
+000628 6394           00907         cpfseq  ad_high
+00062A EF19 F003      00908         goto    bcd_wandeln_U3
+00062E EF20 F003      00909         goto    bcd_wandeln_U4
+                      00910 
+000632                00911 bcd_wandeln_U3
+000632 0794           00912         decf    ad_high
+000634 0100           00913         banksel ad_temp
+000636 51B8           00914         movf    ad_temp, w
+000638 0100           00915         banksel ad_low
+00063A 6F93           00916         movwf   ad_low
+00063C EFF6 F002      00917         goto    inc_bcd_U
+                      00918 
+000640                00919 bcd_wandeln_U4
+000640 5193           00920         movf    ad_low, w
+000642 0100           00921         banksel U_ist_1
+000644 6FC0           00922         movwf   U_ist_1                         ; 1. Stelle von BCD = REST
+000646 EF25 F003      00923         goto    bcd_wandeln_U_end
+                      00924 
+00064A                00925 bcd_wandeln_U_end
+00064A 0012           00926         return
+                      00927 
+00064C                00928 bcd_wandeln_I
+00064C 0012           00929         return
+                      00930 
+00064E                00931 bcd_wandeln_T
+00064E 0012           00932         return
+                      00933 ;__________________________________________________________________________________
+                      00934 
+                      00935 
+                      00936 ;**********************************************************************************
+                      00937 ; Konfiguration der Baudrate sowie die Adresse der Platine
+                      00938 ;**********************************************************************************
+000650                00939 dip_abfrage
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 19
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000650 B082           00940         btfsc   baud0_bit
+000652 EF30 F003      00941         goto    baud_x1
+000656 B084           00942         btfsc   baud1_bit
+000658 EF41 F003      00943         goto    baud_10_set
+00065C EF35 F003      00944         goto    baud_00_set
+000660                00945 baud_x1
+000660 B084           00946         btfsc   baud1_bit
+000662 EF47 F003      00947         goto    baud_11_set
+000666 EF3B F003      00948         goto    baud_01_set
+00066A                00949 baud_00_set
+00066A 94AC           00950         bcf             TXSTA,  BRGH    ; High-Speed RS 232 aus und teiler auf 64
+00066C 96B8           00951         bcf     BAUDCON, BRG16  ; nur 1 Register SPBRG
+00066E 0E19           00952         movlw   .25
+000670 6EAF           00953         movwf   SPBRG                   ; RS 232 Speed auf 9600 Baud stellen
+000672 EF4D F003      00954         goto    add_set
+000676                00955 baud_01_set
+000676 94AC           00956         bcf             TXSTA,  BRGH    ; High-Speed RS 232 aus und teiler auf 64
+000678 96B8           00957         bcf     BAUDCON, BRG16  ; nur 1 Register SPBRG
+00067A 0E0C           00958         movlw   .12
+00067C 6EAF           00959         movwf   SPBRG                   ; RS 232 Speed auf 19200 Baud stellen
+00067E EF4D F003      00960         goto    add_set
+000682                00961 baud_10_set
+000682 84AC           00962         bsf             TXSTA,  BRGH    ; High-Speed RS 232 an und teiler auf 16
+000684 96B8           00963         bcf     BAUDCON, BRG16  ; nur 1 Register SPBRG
+000686 0E10           00964         movlw   .16
+000688 6EAF           00965         movwf   SPBRG                   ; RS 232 Speed auf 57600 Baud stellen
+00068A EF4D F003      00966         goto    add_set
+00068E                00967 baud_11_set
+00068E 84AC           00968         bsf             TXSTA,  BRGH    ; High-Speed RS 232 an und teiler auf 16
+000690 96B8           00969         bcf     BAUDCON, BRG16  ; nur 1 Register SPBRG
+000692 0E08           00970         movlw   .8
+000694 6EAF           00971         movwf   SPBRG                   ; RS 232 Speed auf 115200 Baud stellen
+000696 EF4D F003      00972         goto    add_set
+                      00973 
+00069A                00974 add_set
+00069A B284           00975         btfsc   add0_bit
+00069C EF55 F003      00976         goto    add_x1
+0006A0 B284           00977         btfsc   add1_bit
+0006A2 EF64 F003      00978         goto    add_10_set
+0006A6 EF5A F003      00979         goto    add_00_set
+0006AA                00980 add_x1
+0006AA B284           00981         btfsc   add1_bit
+0006AC EF69 F003      00982         goto    add_11_set
+0006B0 EF5F F003      00983         goto    add_01_set
+0006B4                00984 add_00_set
+0006B4 0100           00985         banksel address
+0006B6 0E30           00986         movlw   '0'
+0006B8 6F95           00987         movwf   address
+0006BA EF6E F003      00988         goto    add_end
+0006BE                00989 add_01_set
+0006BE 0100           00990         banksel address
+0006C0 0E31           00991         movlw   '1'
+0006C2 6F95           00992         movwf   address
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 20
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0006C4 EF6E F003      00993         goto    add_end
+0006C8                00994 add_10_set
+0006C8 0100           00995         banksel address
+0006CA 0E32           00996         movlw   '2'
+0006CC 6F95           00997         movwf   address
+0006CE EF6E F003      00998         goto    add_end
+0006D2                00999 add_11_set
+0006D2 0100           01000         banksel address
+0006D4 0E33           01001         movlw   '3'
+0006D6 6F95           01002         movwf   address
+0006D8 EF6E F003      01003         goto    add_end
+0006DC                01004 add_end
+0006DC 0012           01005         return  
+                      01006 ;__________________________________________________________________________________
+                      01007 
+                      01008 
+                      01009 ;**********************************************************************************
+                      01010 ; Initialisierung des PIC
+                      01011 ;**********************************************************************************
+0006DE                01012 init_system
+0006DE 010F           01013         banksel lcd_tris
+0006E0 6A95           01014         clrf    lcd_tris                        ; lcd_port wird zum Ausgang
+0006E2 6A83           01015         clrf    lcd_port                        ; 
+0006E4 6A80           01016         clrf    ad_port                         ; Data-latch löschen
+                      01017 
+0006E6 8094           01018         bsf             baud0_tris
+0006E8 8096           01019         bsf             baud1_tris
+0006EA 8296           01020         bsf             add0_tris
+0006EC 8296           01021         bsf             add1_tris                       ; Eingänge zum prüfen der Adresse sowie Baudrate
+0006EE 6B9F           01022         clrf    counter                         ; Bytezähler löschen
+                      01023 
+0006F0 0100           01024         banksel mode
+0006F2 81A1           01025         bsf             mode_0                          ; Standard Mode
+                      01026         
+0006F4 0100           01027         banksel lcd_rs_on
+0006F6 0E00           01028         movlw   0x00
+0006F8 6F91           01029         movwf   lcd_rs_on                       ; rs aus Steuerwort stellen
+0006FA 9283           01030         bcf             lcd_rw                          ; Write Modus
+0006FC 9083           01031         bcf             lcd_rs                          ; Steuerwort
+                      01032 
+0006FE 9EF1           01033         bcf             INTCON2, RBPU           ; Pull UPs an PORTB aktivieren
+000700 0EFF           01034         movlw   0xff
+000702 6E93           01035         movwf   int_tris                        ; alle Interrrupts sind Eingänge
+                      01036 
+000704 010F           01037         banksel lcd_tris
+000706 9693           01038         bcf             t3_tris         ; Luefter zum Ausgang Schalten
+000708 9681           01039         bcf             t3_luefter      ; T3 Luefter an
+                      01040         
+00070A 9294           01041         bcf             t2_tris         ; T2 Relais als Ausgang
+00070C 9282           01042         bcf             t2_relais       ; T2 Relais schalten
+                      01043 
+00070E 9E95           01044         bcf             t1_tris         ; T1 Ausgang
+000710 9E83           01045         bcf             t1_relais       ; T1 Relais schalten
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 21
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      01046 
+000712 9C82           01047         bcf             TXD                     ; Transmit-Pin wird zum Ausgang
+000714 8E82           01048         bsf             RXD                     ; Receive-Pin wird zum Eingang
+                      01049         
+000716 8AAC           01050         bsf             TXSTA,  TXEN    ; Transmit erlaubt
+000718 9ED0           01051         bcf             RCON,   IPEN    ; no priority interrupts
+00071A 9007           01052         bcf             ABDOVF, ABDEN   ; no auto Baud sonst muss man 0x55 schicken
+00071C 8EAB           01053         bsf             RCSTA,  SPEN    ; serial port enabled
+00071E 98AC           01054         bcf             TXSTA,  SYNC    ; asynchron mod 
+000720 8A9D           01055         bsf             PIE1,   RCIE    ; enables asynchron interrupt
+000722 88AB           01056         bsf             RCSTA,  CREN    ; enables receiver
+000724 8CF2           01057         bsf             INTCON, PEIE    ; erlaubt Externe Interrupts
+000726 88F2           01058         bsf             INTCON, INT0IE  ; INT0 zulassen
+000728 86F0           01059         bsf             INTCON3, INT1IE ; INT1 zulassen
+00072A 88F0           01060         bsf             INTCON3, INT2IE ; INT2 zulassen
+00072C 86F2           01061         bsf             INTCON, RBIE    ; enables PORTB interrupts
+                      01062 
+00072E 0EFF           01063         movlw   0xff
+000730 6E92           01064         movwf   ad_tris                 ; PORTA als EINGANG
+000732 80C2           01065         bsf     ADCON0, ADON    ; AD-Converter enabled
+000734 0EB5           01066         movlw   0xb5
+000736 6EC0           01067         movwf   ADCON2                  ; conv clock=Fosc/32 TAD=16 right j
+000738 0E0A           01068         movlw   0x0a
+00073A 6EC1           01069         movwf   ADCON1                  ; AN0-AN4 = Analog
+                      01070 
+00073C 8EF2           01071         bsf             INTCON, GIE             ; erlaubt generell Interrupts
+                      01072 
+00073E 0100           01073         banksel bcd_U_1                 ; löschen aller Speicherregister
+000740 0E30           01074         movlw   0x30
+000742 6FAC           01075         movwf   bcd_U_1
+000744 0E30           01076         movlw   0x30
+000746 6FAD           01077         movwf   bcd_U_2
+000748 0E30           01078         movlw   0x30
+00074A 6FAE           01079         movwf   bcd_U_3
+00074C 0E30           01080         movlw   0x30
+00074E 6FAF           01081         movwf   bcd_U_4
+000750 0E30           01082         movlw   0x30
+000752 6FB0           01083         movwf   bcd_I_1
+000754 0E30           01084         movlw   0x30
+000756 6FB1           01085         movwf   bcd_I_2
+000758 0E30           01086         movlw   0x30
+00075A 6FB2           01087         movwf   bcd_I_3
+00075C 0E30           01088         movlw   0x30    
+00075E 6FB3           01089         movwf   bcd_I_4
+000760 0E30           01090         movlw   0x30
+000762 6FBB           01091         movwf   bcd_R_1
+000764 0E30           01092         movlw   0x30
+000766 6FBC           01093         movwf   bcd_R_2
+000768 0E30           01094         movlw   0x30
+00076A 6FBD           01095         movwf   bcd_R_3
+00076C 0E30           01096         movlw   0x30
+00076E 6FBE           01097         movwf   bcd_R_4
+000770 0E30           01098         movlw   0x30
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 22
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000772 6FBF           01099         movwf   bcd_R_5 
+000774 6BB4           01100         clrf    bcd_T_1
+000776 6BB5           01101         clrf    bcd_T_2
+000778 0100           01102         banksel U_ist_1
+00077A 6BC0           01103         clrf    U_ist_1
+00077C 6BC1           01104         clrf    U_ist_2
+00077E 6BC2           01105         clrf    U_ist_3
+000780 6BC3           01106         clrf    U_ist_4
+000782 0100           01107         banksel I_ist_1
+000784 6BC4           01108         clrf    I_ist_1
+000786 6BC5           01109         clrf    I_ist_2
+000788 6BC6           01110         clrf    I_ist_3
+00078A 6BC7           01111         clrf    I_ist_4
+                      01112         
+00078C 0012           01113         return
+                      01114 ;__________________________________________________________________________________
+                      01115 
+                      01116 
+                      01117 ;***************************************************************************
+                      01118 ; Initialisierung des Displays
+                      01119 ;***************************************************************************
+00078E                01120 lcd_init
+00078E 0EFF           01121         movlw   0xff
+000790 EC84 F004      01122         call    pause
+000794 0EFF           01123         movlw   0xff
+000796 EC84 F004      01124         call    pause
+00079A 0EFF           01125         movlw   0xff
+00079C EC84 F004      01126         call    pause                   ; Wait for more than 15ms
+0007A0 0E38           01127         movlw   0x38
+0007A2 EC45 F004      01128         call    ausgabe                 ; Init-Byte ausgeben
+0007A6 0EFF           01129         movlw   0xff
+0007A8 EC84 F004      01130         call    pause           
+0007AC 0EFF           01131         movlw   0xff
+0007AE EC84 F004      01132         call    pause                   ; Wait for more than ...ms
+0007B2 0E38           01133         movlw   0x38
+0007B4 EC45 F004      01134         call    ausgabe                 ; Init-Byte ausgeben
+0007B8 0EFF           01135         movlw   0xff
+0007BA EC84 F004      01136         call    pause                   ; Wait for more than ...ms
+0007BE 0E38           01137         movlw   0x38
+0007C0 EC45 F004      01138         call    ausgabe                 ; Init-Byte ausgeben
+0007C4 0E0F           01139         movlw   0x0f
+0007C6 EC84 F004      01140         call    pause                   ; Wait for more than ...ms
+                      01141 
+0007CA 0E28           01142         movlw   0x28                    ; Funktion set
+0007CC EC92 F004      01143         call    lcd_ausgabe
+0007D0 0E0F           01144         movlw   0x0f                    ; Display on Control
+0007D2 EC92 F004      01145         call    lcd_ausgabe     
+0007D6 0E06           01146         movlw   0x06                    ; Entry Mode set
+0007D8 EC92 F004      01147         call    lcd_ausgabe
+0007DC 0E01           01148         movlw   0x01                    ; clear Display
+0007DE EC92 F004      01149         call    lcd_ausgabe
+0007E2 0E02           01150         movlw   0x02                    ; Cursor at home
+0007E4 EC92 F004      01151         call    lcd_ausgabe
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 23
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      01152 
+0007E8 EC4C F004      01153         call    lcd_datenwort   ; lcd auf Datenwort umschalten
+                      01154         
+0007EC 0E2F           01155         movlw   0x2f
+0007EE EC84 F004      01156         call    pause                   ; Pause bevor das Display anfaengt
+                      01157 
+0007F2 0E50           01158         movlw   'P'                             ; P
+0007F4 EC92 F004      01159         call    lcd_ausgabe     
+0007F8 0E72           01160         movlw   'r'                             ; r
+0007FA EC92 F004      01161         call    lcd_ausgabe
+0007FE 0E6F           01162         movlw   'o'                             ; o
+000800 EC92 F004      01163         call    lcd_ausgabe
+000804 0E67           01164         movlw   'g'                             ; g
+000806 EC92 F004      01165         call    lcd_ausgabe
+00080A 0E2E           01166         movlw   '.'                             ; .
+00080C EC92 F004      01167         call    lcd_ausgabe
+000810 0E20           01168         movlw   ' '                             ;
+000812 EC92 F004      01169         call    lcd_ausgabe
+000816 0E4C           01170         movlw   'L'                             ; L
+000818 EC92 F004      01171         call    lcd_ausgabe
+00081C 0E61           01172         movlw   'a'                             ; a
+00081E EC92 F004      01173         call    lcd_ausgabe
+000822 0E73           01174         movlw   's'                             ; s
+000824 EC92 F004      01175         call    lcd_ausgabe
+000828 0E74           01176         movlw   't'                             ; t
+00082A EC92 F004      01177         call    lcd_ausgabe
+                      01178 
+00082E EC50 F004      01179         call lcd_steuerwort             ; lcd auf Steuerwort stellen
+000832 EC56 F004      01180         call lcd_home_l2                ; lcd auf Zeile 2 pos. 1
+000836 EC4C F004      01181         call lcd_datenwort              ; lcd auf Datenwort stellen
+00083A                01182 lcd_0
+00083A 0E30           01183         movlw   '0'                             ; 0
+00083C EC92 F004      01184         call    lcd_ausgabe
+000840 0E30           01185         movlw   '0'                             ; 0
+000842 EC92 F004      01186         call    lcd_ausgabe
+000846 0E2E           01187         movlw   '.'                             ; .
+000848 EC92 F004      01188         call    lcd_ausgabe
+00084C 0E30           01189         movlw   '0'                             ; 0
+00084E EC92 F004      01190         call    lcd_ausgabe
+000852 0E30           01191         movlw   '0'                             ; 0
+000854 EC92 F004      01192         call    lcd_ausgabe
+000858 0E56           01193         movlw   'V'                             ; V
+00085A EC92 F004      01194         call    lcd_ausgabe
+00085E 0E20           01195         movlw   ' '                             ; 
+000860 EC92 F004      01196         call    lcd_ausgabe
+000864 0E30           01197         movlw   '0'                             ; 0
+000866 EC92 F004      01198         call    lcd_ausgabe
+00086A 0E30           01199         movlw   '0'                             ; 0
+00086C EC92 F004      01200         call    lcd_ausgabe
+000870 0E2E           01201         movlw   '.'                             ; .
+000872 EC92 F004      01202         call    lcd_ausgabe
+000876 0E30           01203         movlw   '0'                             ; 0
+000878 EC92 F004      01204         call    lcd_ausgabe
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 24
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00087C 0E30           01205         movlw   '0'                             ; 0
+00087E EC92 F004      01206         call    lcd_ausgabe
+000882 0E41           01207         movlw   'A'                             ; A
+000884 EC92 F004      01208         call    lcd_ausgabe
+                      01209 
+000888 0012           01210         return                                  ; Ende lcd_init
+                      01211 
+00088A                01212 ausgabe                                         ; spezielle Ausgabe zum Inisialisieren
+00088A 010F           01213         banksel lcd_port
+00088C 6E83           01214         movwf   lcd_port
+00088E 8483           01215         bsf     lcd_enable
+000890 0000           01216         nop
+000892 9483           01217         bcf     lcd_enable
+000894 0000           01218         nop
+000896 0012           01219         return
+                      01220 
+000898                01221 lcd_datenwort                                   ; lcd nimmt jetzt Datenwoerter an
+000898 0100           01222         banksel lcd_rs_on       
+00089A 0EFF           01223         movlw   0xff
+00089C 6F91           01224         movwf   lcd_rs_on
+00089E 0012           01225         return
+                      01226 
+0008A0                01227 lcd_steuerwort                                  ; lcd nimmt jetzt Steuerwoerter an
+0008A0 0100           01228         banksel lcd_rs_on       
+0008A2 0E00           01229         movlw   0x00
+0008A4 6F91           01230         movwf   lcd_rs_on
+0008A6 010F           01231         banksel lcd_port
+0008A8 9083           01232         bcf             lcd_rs
+0008AA 0012           01233         return
+                      01234 
+0008AC                01235 lcd_home_l2                                             ; Zeile 2 pos.1
+0008AC EC50 F004      01236         call    lcd_steuerwort
+0008B0 0EC0           01237         movlw   0xc0
+0008B2 EC92 F004      01238         call    lcd_ausgabe
+0008B6 EC4C F004      01239         call    lcd_datenwort   
+0008BA 0012           01240         return
+                      01241 
+0008BC                01242 lcd_clear_l2                                    ; löscht die 2. Zeile vom Display
+0008BC EC56 F004      01243         call    lcd_home_l2
+0008C0 0100           01244         banksel mini_loop
+0008C2 0E10           01245         movlw   0x10
+0008C4 6FAB           01246         movwf   mini_loop
+0008C6                01247 clear_go
+0008C6 0E20           01248         movlw   ' '
+0008C8 EC92 F004      01249         call    lcd_ausgabe
+0008CC 0100           01250         banksel mini_loop
+0008CE 2FAB           01251         decfsz  mini_loop
+0008D0 EF63 F004      01252         goto    clear_go
+0008D4 EC56 F004      01253         call    lcd_home_l2
+0008D8 0012           01254         return 
+                      01255         
+                      01256 ;__________________________________________________________________________________
+                      01257 
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 25
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      01258 
+                      01259 ;***************************************************************************
+                      01260 ; Pause enthaelt eine 100us Zeitschleife die man 1-255 mal durchlaufen kann
+                      01261 ; lange_pause enthält eine ca 1s Warteschleife
+                      01262 ;***************************************************************************
+0008DA                01263 lange_pause
+0008DA 0E1E           01264         movlw   .30
+0008DC 0100           01265         banksel loop3
+0008DE 6FC8           01266         movwf   loop3
+0008E0                01267 lange_pause_go
+0008E0 0EC8           01268         movlw   .200
+0008E2 EC84 F004      01269         call    pause
+0008E6 0EC8           01270         movlw   .200
+0008E8 EC84 F004      01271         call    pause
+0008EC 0EC8           01272         movlw   .200
+0008EE EC84 F004      01273         call    pause
+0008F2 0EC8           01274         movlw   .200
+0008F4 EC84 F004      01275         call    pause
+0008F8 0EC8           01276         movlw   .200
+0008FA EC84 F004      01277         call    pause
+0008FE 0100           01278         banksel loop3
+000900 2FC8           01279         decfsz  loop3, f
+000902 EF70 F004      01280         goto    lange_pause_go
+000906 0012           01281         return
+                      01282 
+000908                01283 pause
+000908 0100           01284         banksel loop2
+00090A 6F87           01285         movwf   loop2           ; wie oft X*100us
+00090C                01286 loop_1                                  ; 100us pause
+00090C 0E1F           01287         movlw   1fh
+00090E 6F86           01288         movwf   loop1
+000910                01289 loop_0
+000910 2F86           01290         decfsz  loop1,f
+000912 EF88 F004      01291         goto    loop_0
+000916 0000           01292         nop
+000918 0000           01293         nop
+00091A 2F87           01294         decfsz  loop2,f         ; Multiplikator fuer loop_1 (100us)
+00091C EF86 F004      01295         goto    loop_1
+000920 010F           01296         banksel lcd_port
+000922 0012           01297         return
+                      01298 ;__________________________________________________________________________________
+                      01299 
+                      01300                 
+                      01301 ;*********************************************************************************
+                      01302 ; lcd-ausgabe in 2 Schritten damit man die 8 Bit Daten im 4 Bit Modus übertraegt
+                      01303 ;*********************************************************************************
+000924                01304 lcd_ausgabe
+000924 0100           01305         banksel lcd_data
+000926 6F88           01306         movwf   lcd_data
+000928 ECCA F004      01307         call    lcd_busy                ; busy-flag auslesen und solange warten bis wieder bereit ist
+                      01308 
+00092C 0100           01309         banksel lcd_data
+00092E B391           01310         btfsc   lcd_rs_on, 1
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 26
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000930 ECC0 F004      01311         call    set_lcd_rs
+                      01312 
+000934 ECBA F004      01313         call    lcd_loesche_data
+000938 0100           01314         banksel lcd_data
+00093A 5188           01315         movf    lcd_data, w
+00093C 0BF0           01316         andlw   H'F0'
+00093E 6F89           01317         movwf   lcd_data2
+000940 3189           01318         rrcf    lcd_data2,0             ; um 3 Stellen nach Rechts, damit D4-D7 angesprochen werden
+000942 010F           01319         banksel lcd_port
+000944 1283           01320         iorwf   lcd_port,1              ; Hi-Nibble Daten schreiben
+000946 8483           01321         bsf         lcd_enable
+000948 0000           01322         nop
+00094A 9483           01323         bcf             lcd_enable
+00094C 0000           01324         nop
+00094E ECBA F004      01325         call    lcd_loesche_data
+                      01326         
+000952 0100           01327         banksel lcd_data        
+000954 3988           01328         swapf   lcd_data, w
+000956 0BF0           01329         andlw   H'F0'
+000958 6F89           01330         movwf   lcd_data2
+00095A 3189           01331         rrcf    lcd_data2,0             ; um 3 Stellen nach Rechts, damit D4-D7 angesprochen werden
+00095C 010F           01332         banksel lcd_port
+00095E 1283           01333         iorwf   lcd_port,1              ; Lo-Nibble Daten schreiben
+000960 8483           01334         bsf             lcd_enable
+000962 0000           01335         nop
+000964 9483           01336         bcf             lcd_enable
+000966 0000           01337         nop
+000968 ECBA F004      01338         call    lcd_loesche_data
+00096C 0E05           01339         movlw   0x05
+00096E EC84 F004      01340         call    pause                   ; Pause-Zeit damit Zeichen geschrieben werden
+000972 0012           01341         return
+                      01342 
+000974                01343 lcd_loesche_data                        ; D4-D7 auf 0 setzen
+000974 010F           01344         banksel lcd_port
+000976 9683           01345         bcf             lcd_port,3
+000978 9883           01346         bcf             lcd_port,4
+00097A 9A83           01347         bcf             lcd_port,5
+00097C 9C83           01348         bcf             lcd_port,6
+00097E 0012           01349         return
+                      01350 
+000980                01351 set_lcd_rs
+000980 010F           01352         banksel lcd_port
+000982 8083           01353         bsf             lcd_rs                  ; rs auf Datenwort
+000984 0012           01354         return
+                      01355 ;__________________________________________________________________________________
+                      01356 
+                      01357 
+                      01358 ;***************************************************************************
+                      01359 ; Ausgabe der Daten an die RS232 Schnittstelle
+                      01360 ;***************************************************************************    
+000986                01361 rs232_ausgabe
+000986 010F           01362         banksel TXREG
+000988 6EAD           01363         movwf   TXREG                   ; Byte Antwort
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 27
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00098A 0100           01364         banksel address
+00098C                01365 kurz_warten
+00098C A2AC           01366         btfss   TXSTA, TRMT
+00098E EFC6 F004      01367         goto    kurz_warten
+000992 0012           01368         return
+                      01369 ;__________________________________________________________________________________
+                      01370 
+                      01371 
+                      01372 ;**********************************************************************************
+                      01373 ; lcd-Busy-Flag auslesen und warten bis das LCD wieder bereit ist
+                      01374 ;**********************************************************************************
+000994                01375 lcd_busy
+000994 010F           01376     banksel lcd_tris            ; lcd Port zum Eingang machen
+000996 8C95           01377         bsf             lcd_tris, 6             ; D7 zum Eingang machen
+                      01378     
+000998                01379 busy_loop
+000998 010F           01380         banksel lcd_port
+00099A 9083           01381         bcf             lcd_rs          
+00099C 8283           01382         bsf             lcd_rw                  ; auf lesen umschalten
+00099E 8483           01383         bsf             lcd_enable
+0009A0 0000           01384         nop
+0009A2 5083           01385         movf    lcd_port, w             ; port einlesen
+0009A4 0000           01386         nop
+0009A6 0100           01387         banksel lcd_status
+0009A8 6F90           01388         movwf   lcd_status              ; im lcd statusregister ablegen
+0009AA 010F           01389         banksel lcd_port
+0009AC 9483           01390         bcf             lcd_enable
+                      01391         
+0009AE 0100           01392         banksel lcd_status
+0009B0 BD90           01393         btfsc   lcd_status, 6   ; busy-flag auswerten
+0009B2 EFCC F004      01394         goto    busy_loop               ; solange wiederholen, bis lcd bereit ist
+                      01395 
+0009B6 010F           01396         banksel lcd_port
+0009B8 9283           01397         bcf             lcd_rw                  ; auf Schreibmodus umstellen
+0009BA 9C95           01398         bcf             lcd_tris, 6             ; D7 zum Ausgang wieder machen    
+0009BC 0012           01399     return
+                      01400 ;__________________________________________________________________________________     
+                      01401 
+                      01402 
+                      01403 ;**********************************************************************************
+                      01404 ; Mode auswahl der Frontplatte
+                      01405 ;**********************************************************************************
+0009BE                01406 mode_auswahl
+0009BE 0100           01407         banksel mode
+0009C0 B1A1           01408         btfsc   mode_0
+0009C2 EFF3 F004      01409         goto    mode_0_routine
+0009C6 B3A1           01410         btfsc   mode_U
+0009C8 EFF8 F004      01411         goto    mode_U_routine
+0009CC B5A1           01412         btfsc   mode_I
+0009CE EF37 F005      01413         goto    mode_I_routine
+0009D2 B7A1           01414         btfsc   mode_P
+0009D4 EF76 F005      01415         goto    mode_P_routine
+0009D8 B9A1           01416         btfsc   mode_T
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 28
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0009DA EFA0 F005      01417         goto    mode_T_routine
+0009DE BBA1           01418         btfsc   mode_R
+0009E0 EFBF F005      01419         goto    mode_R_routine
+0009E4 0012           01420         return
+                      01421 
+0009E6                01422 mode_0_routine
+0009E6 ECE8 F005      01423         call    clr_home_l2
+0009EA EC1D F004      01424         call    lcd_0
+0009EE 0012           01425         return
+                      01426 
+0009F0                01427 mode_U_routine                                  ; U max und U Ist am Display ausgeben
+0009F0 ECE8 F005      01428         call    clr_home_l2
+0009F4 0E55           01429         movlw   'U'
+0009F6 EC92 F004      01430         call    lcd_ausgabe
+0009FA 0E4D           01431         movlw   'M'
+0009FC EC92 F004      01432         call    lcd_ausgabe
+000A00 0100           01433         banksel bcd_U_4
+000A02 51AF           01434         movf    bcd_U_4, w 
+000A04 EC92 F004      01435         call    lcd_ausgabe
+000A08 0100           01436         banksel bcd_U_3
+000A0A 51AE           01437         movf    bcd_U_3, w
+000A0C EC92 F004      01438         call    lcd_ausgabe
+000A10 0E2E           01439         movlw   '.'
+000A12 EC92 F004      01440         call    lcd_ausgabe
+000A16 0100           01441         banksel bcd_U_2
+000A18 51AD           01442         movf    bcd_U_2, w
+000A1A EC92 F004      01443         call    lcd_ausgabe
+000A1E 0100           01444         banksel bcd_U_1
+000A20 51AC           01445         movf    bcd_U_1, w
+000A22 EC92 F004      01446         call    lcd_ausgabe
+000A26 0E56           01447         movlw   'V'
+000A28 EC92 F004      01448         call    lcd_ausgabe
+000A2C 0E20           01449         movlw   ' '
+000A2E EC92 F004      01450         call    lcd_ausgabe
+000A32 0E49           01451         movlw   'I'
+000A34 EC92 F004      01452         call    lcd_ausgabe
+000A38 0100           01453         banksel U_ist_4
+000A3A 51C3           01454         movf    U_ist_4, w
+000A3C 0930           01455         iorlw   0x30
+000A3E EC92 F004      01456         call    lcd_ausgabe
+000A42 0100           01457         banksel U_ist_3
+000A44 51C2           01458         movf    U_ist_3, w
+000A46 0930           01459         iorlw   0x30
+000A48 EC92 F004      01460         call    lcd_ausgabe
+000A4C 0E2E           01461         movlw   '.'
+000A4E EC92 F004      01462         call    lcd_ausgabe
+000A52 0100           01463         banksel U_ist_2
+000A54 51C1           01464         movf    U_ist_2, w
+000A56 0930           01465         iorlw   0x30
+000A58 EC92 F004      01466         call    lcd_ausgabe
+000A5C 0100           01467         banksel U_ist_1
+000A5E 51C0           01468         movf    U_ist_1, w
+000A60 0930           01469         iorlw   0x30
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 29
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000A62 EC92 F004      01470         call    lcd_ausgabe
+000A66 0E56           01471         movlw   'V'
+000A68 EC92 F004      01472         call    lcd_ausgabe
+000A6C 0012           01473         return
+                      01474 
+000A6E                01475 mode_I_routine                                  ; I max und I Ist am Display ausgeben
+000A6E ECE8 F005      01476         call    clr_home_l2
+000A72 0E49           01477         movlw   'I'
+000A74 EC92 F004      01478         call    lcd_ausgabe
+000A78 0E4D           01479         movlw   'M'
+000A7A EC92 F004      01480         call    lcd_ausgabe
+000A7E 0100           01481         banksel bcd_I_4
+000A80 51B3           01482         movf    bcd_I_4, w 
+000A82 EC92 F004      01483         call    lcd_ausgabe
+000A86 0100           01484         banksel bcd_I_3
+000A88 51B2           01485         movf    bcd_I_3, w
+000A8A EC92 F004      01486         call    lcd_ausgabe
+000A8E 0E2E           01487         movlw   '.'
+000A90 EC92 F004      01488         call    lcd_ausgabe
+000A94 0100           01489         banksel bcd_I_2
+000A96 51B1           01490         movf    bcd_I_2, w
+000A98 EC92 F004      01491         call    lcd_ausgabe
+000A9C 0100           01492         banksel bcd_I_1
+000A9E 51B0           01493         movf    bcd_I_1, w
+000AA0 EC92 F004      01494         call    lcd_ausgabe
+000AA4 0E41           01495         movlw   'A'
+000AA6 EC92 F004      01496         call    lcd_ausgabe
+000AAA 0E20           01497         movlw   ' '
+000AAC EC92 F004      01498         call    lcd_ausgabe
+000AB0 0E49           01499         movlw   'I'
+000AB2 EC92 F004      01500         call    lcd_ausgabe
+000AB6 0100           01501         banksel I_ist_4
+000AB8 51C7           01502         movf    I_ist_4, w
+000ABA 0930           01503         iorlw   0x30
+000ABC EC92 F004      01504         call    lcd_ausgabe
+000AC0 0100           01505         banksel I_ist_3
+000AC2 51C6           01506         movf    I_ist_3, w
+000AC4 0930           01507         iorlw   0x30
+000AC6 EC92 F004      01508         call    lcd_ausgabe
+000ACA 0E2E           01509         movlw   '.'
+000ACC EC92 F004      01510         call    lcd_ausgabe
+000AD0 0100           01511         banksel I_ist_2
+000AD2 51C5           01512         movf    I_ist_2, w
+000AD4 0930           01513         iorlw   0x30
+000AD6 EC92 F004      01514         call    lcd_ausgabe
+000ADA 0100           01515         banksel I_ist_1
+000ADC 51C4           01516         movf    I_ist_1, w
+000ADE 0930           01517         iorlw   0x30
+000AE0 EC92 F004      01518         call    lcd_ausgabe
+000AE4 0E41           01519         movlw   'A'
+000AE6 EC92 F004      01520         call    lcd_ausgabe
+000AEA 0012           01521         return
+                      01522 
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 30
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000AEC                01523 mode_P_routine                          ; Ausgabe der Leistung am Display
+000AEC ECE8 F005      01524         call    clr_home_l2
+000AF0 0E4C           01525         movlw   'L'
+000AF2 EC92 F004      01526         call    lcd_ausgabe
+000AF6 0E65           01527         movlw   'e'
+000AF8 EC92 F004      01528         call    lcd_ausgabe
+000AFC 0E69           01529         movlw   'i'
+000AFE EC92 F004      01530         call    lcd_ausgabe
+000B02 0E73           01531         movlw   's'
+000B04 EC92 F004      01532         call    lcd_ausgabe
+000B08 0E74           01533         movlw   't'
+000B0A EC92 F004      01534         call    lcd_ausgabe
+000B0E 0E75           01535         movlw   'u'
+000B10 EC92 F004      01536         call    lcd_ausgabe
+000B14 0E6E           01537         movlw   'n'
+000B16 EC92 F004      01538         call    lcd_ausgabe
+000B1A 0E67           01539         movlw   'g'
+000B1C EC92 F004      01540         call    lcd_ausgabe
+000B20 0E20           01541         movlw   ' '
+000B22 EC92 F004      01542         call    lcd_ausgabe
+000B26 0E30           01543         movlw   '0'
+000B28 EC92 F004      01544         call    lcd_ausgabe
+000B2C 0E2E           01545         movlw   '.'
+000B2E EC92 F004      01546         call    lcd_ausgabe
+000B32 0E30           01547         movlw   '0'
+000B34 EC92 F004      01548         call    lcd_ausgabe
+000B38 0E57           01549         movlw   'W'
+000B3A EC92 F004      01550         call    lcd_ausgabe
+000B3E 0012           01551         return
+                      01552         
+000B40                01553 mode_T_routine
+000B40 ECE8 F005      01554         call    clr_home_l2
+000B44 0E54           01555         movlw   'T'
+000B46 EC92 F004      01556         call    lcd_ausgabe
+000B4A 0E65           01557         movlw   'e'
+000B4C EC92 F004      01558         call    lcd_ausgabe
+000B50 0E6D           01559         movlw   'm'
+000B52 EC92 F004      01560         call    lcd_ausgabe
+000B56 0E70           01561         movlw   'p'
+000B58 EC92 F004      01562         call    lcd_ausgabe
+000B5C 0E20           01563         movlw   ' '
+000B5E EC92 F004      01564         call    lcd_ausgabe
+000B62 0100           01565         banksel bcd_T_2
+000B64 51B5           01566         movf    bcd_T_2, w
+000B66 0930           01567         iorlw   0x30
+000B68 EC92 F004      01568         call    lcd_ausgabe
+000B6C 0100           01569         banksel bcd_T_1
+000B6E 51B4           01570         movf    bcd_T_1, w
+000B70 0930           01571         iorlw   0x30
+000B72 EC92 F004      01572         call    lcd_ausgabe
+000B76 0E43           01573         movlw   'C'
+000B78 EC92 F004      01574         call    lcd_ausgabe
+000B7C 0012           01575         return
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 31
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      01576 
+000B7E                01577 mode_R_routine
+000B7E ECE8 F005      01578         call    clr_home_l2
+000B82 0E52           01579         movlw   'R'
+000B84 EC92 F004      01580         call    lcd_ausgabe
+000B88 0E20           01581         movlw   ' '
+000B8A EC92 F004      01582         call    lcd_ausgabe
+000B8E 0100           01583         banksel bcd_R_5
+000B90 51BF           01584         movf    bcd_R_5, w
+000B92 EC92 F004      01585         call    lcd_ausgabe
+000B96 0100           01586         banksel bcd_R_4
+000B98 51BE           01587         movf    bcd_R_4, w
+000B9A EC92 F004      01588         call    lcd_ausgabe
+000B9E 0100           01589         banksel bcd_R_3
+000BA0 51BD           01590         movf    bcd_R_3, w
+000BA2 EC92 F004      01591         call    lcd_ausgabe
+000BA6 0100           01592         banksel bcd_R_2
+000BA8 51BC           01593         movf    bcd_R_2, w
+000BAA EC92 F004      01594         call    lcd_ausgabe
+000BAE 0100           01595         banksel bcd_R_1
+000BB0 51BB           01596         movf    bcd_R_1, w
+000BB2 EC92 F004      01597         call    lcd_ausgabe
+000BB6 0E20           01598         movlw   ' '
+000BB8 EC92 F004      01599         call    lcd_ausgabe
+000BBC 0E4F           01600         movlw   'O'
+000BBE EC92 F004      01601         call    lcd_ausgabe
+000BC2 0E68           01602         movlw   'h'
+000BC4 EC92 F004      01603         call    lcd_ausgabe
+000BC8 0E6D           01604         movlw   'm'
+000BCA EC92 F004      01605         call    lcd_ausgabe
+000BCE 0012           01606         return
+                      01607 
+000BD0                01608 clr_home_l2                                     ; löscht Zeile2 und springt zum Anfang Zeile2
+000BD0 EC50 F004      01609         call lcd_steuerwort             ; lcd auf Steuerwort stellen
+000BD4 EC56 F004      01610         call lcd_home_l2                ; lcd auf Zeile 2 pos. 1
+000BD8 EC4C F004      01611         call lcd_datenwort              ; lcd auf Datenwort stellen
+000BDC 0E20           01612         movlw   ' '
+000BDE EC92 F004      01613         call lcd_ausgabe
+000BE2 0E20           01614         movlw   ' '
+000BE4 EC92 F004      01615         call lcd_ausgabe
+000BE8 0E20           01616         movlw   ' '
+000BEA EC92 F004      01617         call lcd_ausgabe
+000BEE 0E20           01618         movlw   ' '
+000BF0 EC92 F004      01619         call lcd_ausgabe
+000BF4 0E20           01620         movlw   ' '
+000BF6 EC92 F004      01621         call lcd_ausgabe
+000BFA 0E20           01622         movlw   ' '
+000BFC EC92 F004      01623         call lcd_ausgabe
+000C00 0E20           01624         movlw   ' '
+000C02 EC92 F004      01625         call lcd_ausgabe
+000C06 0E20           01626         movlw   ' '
+000C08 EC92 F004      01627         call lcd_ausgabe
+000C0C 0E20           01628         movlw   ' '
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 32
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000C0E EC92 F004      01629         call lcd_ausgabe
+000C12 0E20           01630         movlw   ' '
+000C14 EC92 F004      01631         call lcd_ausgabe
+000C18 0E20           01632         movlw   ' '
+000C1A EC92 F004      01633         call lcd_ausgabe
+000C1E 0E20           01634         movlw   ' '
+000C20 EC92 F004      01635         call lcd_ausgabe
+000C24 0E20           01636         movlw   ' '
+000C26 EC92 F004      01637         call lcd_ausgabe
+000C2A 0E20           01638         movlw   ' '
+000C2C EC92 F004      01639         call lcd_ausgabe
+000C30 0E20           01640         movlw   ' '
+000C32 EC92 F004      01641         call lcd_ausgabe
+000C36 0E20           01642         movlw   ' '
+000C38 EC92 F004      01643         call lcd_ausgabe
+000C3C EC50 F004      01644         call lcd_steuerwort             ; lcd auf Steuerwort stellen
+000C40 EC56 F004      01645         call lcd_home_l2                ; lcd auf Zeile 2 pos. 1
+000C44 EC4C F004      01646         call lcd_datenwort              ; lcd auf Datenwort stellen
+000C48 0012           01647         return
+                      01648 ;__________________________________________________________________________________     
+                      01649 
+                      01650 
+                      01651         end                                             ; das Ende des Programms 
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 33
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+A                                 00000000
+ABDEN                             00000000
+ABDOVF                            00000007
+ACCESS                            00000000
+ACKDT                             00000005
+ACKEN                             00000004
+ACKSTAT                           00000006
+ACQT0                             00000003
+ACQT1                             00000004
+ACQT2                             00000005
+ADCON0                            00000FC2
+ADCON1                            00000FC1
+ADCON2                            00000FC0
+ADCS0                             00000000
+ADCS1                             00000001
+ADCS2                             00000002
+ADDEN                             00000003
+ADEN                              00000003
+ADFM                              00000007
+ADIE                              00000006
+ADIF                              00000006
+ADIP                              00000006
+ADON                              00000000
+ADRES                             00000FC3
+ADRESH                            00000FC4
+ADRESL                            00000FC3
+AN0                               00000000
+AN1                               00000001
+AN10                              00000001
+AN11                              00000004
+AN12                              00000000
+AN2                               00000002
+AN3                               00000003
+AN4                               00000005
+AN5                               00000000
+AN6                               00000001
+AN7                               00000002
+AN8                               00000002
+AN9                               00000003
+BANKED                            00000001
+BAUDCON                           00000FB8
+BAUDCTL                           00000FB8
+BCLIE                             00000003
+BCLIF                             00000003
+BCLIP                             00000003
+BF                                00000000
+BGST                              00000005
+BOR                               00000000
+BRG16                             00000003
+BRGH                              00000002
+BSR                               00000FE0
+C                                 00000000
+C1INV                             00000004
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 34
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+C1OUT                             00000006
+C2INV                             00000005
+C2OUT                             00000007
+CCP1                              00000002
+CCP1CON                           00000FBD
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1IP                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1X                             00000005
+CCP1Y                             00000004
+CCP2CON                           00000FBA
+CCP2IE                            00000000
+CCP2IF                            00000000
+CCP2IP                            00000000
+CCP2M0                            00000000
+CCP2M1                            00000001
+CCP2M2                            00000002
+CCP2M3                            00000003
+CCP2X                             00000005
+CCP2Y                             00000004
+CCP2_PORTB                        00000003
+CCP2_PORTC                        00000001
+CCPR1                             00000FBE
+CCPR1H                            00000FBF
+CCPR1L                            00000FBE
+CCPR2                             00000FBB
+CCPR2H                            00000FBC
+CCPR2L                            00000FBB
+CFGS                              00000006
+CHS0                              00000002
+CHS1                              00000003
+CHS2                              00000004
+CHS3                              00000005
+CIS                               00000003
+CK                                00000006
+CKE                               00000006
+CKP                               00000004
+CLKI                              00000007
+CLKO                              00000006
+CM0                               00000000
+CM1                               00000001
+CM2                               00000002
+CMCON                             00000FB4
+CMIE                              00000006
+CMIF                              00000006
+CMIP                              00000006
+CREN                              00000004
+CS                                00000002
+CSRC                              00000007
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 35
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CVR0                              00000000
+CVR1                              00000001
+CVR2                              00000002
+CVR3                              00000003
+CVRCON                            00000FB5
+CVREF                             00000002
+CVREN                             00000007
+CVROE                             00000006
+CVRR                              00000005
+CVRSS                             00000004
+D                                 00000005
+DC                                00000001
+DC1B0                             00000004
+DC1B1                             00000005
+DC2B0                             00000004
+DC2B1                             00000005
+DDRA                              TRISA
+DDRB                              TRISB
+DDRC                              TRISC
+DDRD                              TRISD
+DDRE                              TRISE
+DONE                              00000001
+D_A                               00000005
+ECCP1AS                           00000FB6
+ECCPAS0                           00000004
+ECCPAS1                           00000005
+ECCPAS2                           00000006
+ECCPASE                           00000007
+EEADR                             00000FA9
+EECON1                            00000FA6
+EECON2                            00000FA7
+EEDATA                            00000FA8
+EEIE                              00000004
+EEIF                              00000004
+EEIP                              00000004
+EEPGD                             00000007
+FAST                              00000001
+FERR                              00000002
+FLTS                              00000002
+FREE                              00000004
+FSR0                              00000000
+FSR0H                             00000FEA
+FSR0L                             00000FE9
+FSR1                              00000001
+FSR1H                             00000FE2
+FSR1L                             00000FE1
+FSR2                              00000002
+FSR2H                             00000FDA
+FSR2L                             00000FD9
+GCEN                              00000007
+GIE                               00000007
+GIEH                              00000007
+GIEL                              00000006
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 36
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+GO                                00000001
+GO_DONE                           00000001
+HLVDCON                           00000FD2
+HLVDEN                            00000004
+HLVDIE                            00000002
+HLVDIF                            00000002
+HLVDIP                            00000002
+HLVDL0                            00000000
+HLVDL1                            00000001
+HLVDL2                            00000002
+HLVDL3                            00000003
+IBF                               00000007
+IBOV                              00000005
+IDLEN                             00000007
+INDF0                             00000FEF
+INDF1                             00000FE7
+INDF2                             00000FDF
+INT0                              00000000
+INT0E                             00000004
+INT0F                             00000001
+INT0IE                            00000004
+INT0IF                            00000001
+INT1                              00000001
+INT1E                             00000003
+INT1F                             00000000
+INT1IE                            00000003
+INT1IF                            00000000
+INT1IP                            00000006
+INT1P                             00000006
+INT2                              00000002
+INT2E                             00000004
+INT2F                             00000001
+INT2IE                            00000004
+INT2IF                            00000001
+INT2IP                            00000007
+INT2P                             00000007
+INTCON                            00000FF2
+INTCON2                           00000FF1
+INTCON3                           00000FF0
+INTEDG0                           00000006
+INTEDG1                           00000005
+INTEDG2                           00000004
+INTSRC                            00000007
+IOFS                              00000002
+IPEN                              00000007
+IPR1                              00000F9F
+IPR2                              00000FA2
+IRCF0                             00000004
+IRCF1                             00000005
+IRCF2                             00000006
+IRVST                             00000005
+IVRST                             00000005
+I_down                            000004B2
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 37
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+I_high                            0xa3
+I_ist_1                           0xc4
+I_ist_2                           0xc5
+I_ist_3                           0xc6
+I_ist_4                           0xc7
+I_low                             0xa2
+I_out                             0000024C
+I_set                             0000022A
+I_up                              00000406
+KBI0                              00000004
+KBI1                              00000005
+KBI2                              00000006
+KBI3                              00000007
+LATA                              00000F89
+LATA0                             00000000
+LATA1                             00000001
+LATA2                             00000002
+LATA3                             00000003
+LATA4                             00000004
+LATA5                             00000005
+LATA6                             00000006
+LATA7                             00000007
+LATB                              00000F8A
+LATB0                             00000000
+LATB1                             00000001
+LATB2                             00000002
+LATB3                             00000003
+LATB4                             00000004
+LATB5                             00000005
+LATB6                             00000006
+LATB7                             00000007
+LATC                              00000F8B
+LATC0                             00000000
+LATC1                             00000001
+LATC2                             00000002
+LATC3                             00000003
+LATC4                             00000004
+LATC5                             00000005
+LATC6                             00000006
+LATC7                             00000007
+LATD                              00000F8C
+LATD0                             00000000
+LATD1                             00000001
+LATD2                             00000002
+LATD3                             00000003
+LATD4                             00000004
+LATD5                             00000005
+LATD6                             00000006
+LATD7                             00000007
+LATE                              00000F8D
+LATE0                             00000000
+LATE1                             00000001
+LATE2                             00000002
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 38
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+LVDCON                            00000FD2
+LVDEN                             00000004
+LVDIE                             00000002
+LVDIF                             00000002
+LVDIN                             00000005
+LVDIP                             00000002
+LVDL0                             00000000
+LVDL1                             00000001
+LVDL2                             00000002
+LVDL3                             00000003
+LVV0                              00000000
+LVV1                              00000001
+LVV2                              00000002
+LVV3                              00000003
+MCLR                              00000003
+N                                 00000004
+NOT_A                             00000005
+NOT_ADDRESS                       00000005
+NOT_BOR                           00000000
+NOT_CS                            00000002
+NOT_DONE                          00000001
+NOT_MCLR                          00000003
+NOT_PD                            00000002
+NOT_POR                           00000001
+NOT_RBPU                          00000007
+NOT_RD                            00000000
+NOT_RI                            00000004
+NOT_SS                            00000005
+NOT_T1SYNC                        00000002
+NOT_T3SYNC                        00000002
+NOT_TO                            00000003
+NOT_W                             00000002
+NOT_WR                            00000001
+NOT_WRITE                         00000002
+OBF                               00000006
+OERR                              00000001
+OSC1                              00000007
+OSC2                              00000006
+OSCCON                            00000FD3
+OSCFIE                            00000007
+OSCFIF                            00000007
+OSCFIP                            00000007
+OSCTUNE                           00000F9B
+OSTS                              00000003
+OV                                00000003
+P                                 00000004
+P1B                               00000005
+P1C                               00000006
+P1D                               00000007
+P1M0                              00000006
+P1M1                              00000007
+PC                                00000FF9
+PCFG0                             00000000
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 39
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PCFG1                             00000001
+PCFG2                             00000002
+PCFG3                             00000003
+PCL                               00000FF9
+PCLATH                            00000FFA
+PCLATU                            00000FFB
+PD                                00000002
+PDC0                              00000000
+PDC1                              00000001
+PDC2                              00000002
+PDC3                              00000003
+PDC4                              00000004
+PDC5                              00000005
+PDC6                              00000006
+PEIE                              00000006
+PEN                               00000002
+PGC                               00000006
+PGD                               00000007
+PGM                               00000005
+PIE1                              00000F9D
+PIE2                              00000FA0
+PIR1                              00000F9E
+PIR2                              00000FA1
+PLLEN                             00000006
+PLUSW0                            00000FEB
+PLUSW1                            00000FE3
+PLUSW2                            00000FDB
+POR                               00000001
+PORTA                             00000F80
+PORTB                             00000F81
+PORTC                             00000F82
+PORTD                             00000F83
+PORTE                             00000F84
+POSTDEC0                          00000FED
+POSTDEC1                          00000FE5
+POSTDEC2                          00000FDD
+POSTINC0                          00000FEE
+POSTINC1                          00000FE6
+POSTINC2                          00000FDE
+PR2                               00000FCB
+PREINC0                           00000FEC
+PREINC1                           00000FE4
+PREINC2                           00000FDC
+PROD                              00000FF3
+PRODH                             00000FF4
+PRODL                             00000FF3
+PRSEN                             00000007
+PSA                               00000003
+PSP0                              00000000
+PSP1                              00000001
+PSP2                              00000002
+PSP3                              00000003
+PSP4                              00000004
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 40
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSP5                              00000005
+PSP6                              00000006
+PSP7                              00000007
+PSPIE                             00000007
+PSPIF                             00000007
+PSPIP                             00000007
+PSPMODE                           00000004
+PSSAC0                            00000002
+PSSAC1                            00000003
+PSSBD0                            00000000
+PSSBD1                            00000001
+PWM1CON                           00000FB7
+P_high                            0xaa
+P_low                             0xa9
+P_out                             00000316
+R                                 00000002
+RA0                               00000000
+RA1                               00000001
+RA2                               00000002
+RA3                               00000003
+RA4                               00000004
+RA5                               00000005
+RA6                               00000006
+RA7                               00000007
+RB0                               00000000
+RB1                               00000001
+RB2                               00000002
+RB3                               00000003
+RB4                               00000004
+RB5                               00000005
+RB6                               00000006
+RB7                               00000007
+RBIE                              00000003
+RBIF                              00000000
+RBIP                              00000000
+RBPU                              00000007
+RC0                               00000000
+RC1                               00000001
+RC2                               00000002
+RC3                               00000003
+RC4                               00000004
+RC5                               00000005
+RC6                               00000006
+RC7                               00000007
+RCEN                              00000003
+RCIDL                             00000006
+RCIE                              00000005
+RCIF                              00000005
+RCIP                              00000005
+RCMT                              00000006
+RCON                              00000FD0
+RCREG                             00000FAE
+RCSTA                             00000FAB
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 41
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+RD                                00000000
+RD0                               00000000
+RD1                               00000001
+RD16                              00000007
+RD2                               00000002
+RD3                               00000003
+RD4                               00000004
+RD5                               00000005
+RD6                               00000006
+RD7                               00000007
+RE0                               00000000
+RE1                               00000001
+RE2                               00000002
+RE3                               00000003
+RI                                00000004
+RSEN                              00000001
+RX                                00000007
+RX9                               00000006
+RX9D                              00000000
+RXD                               PORTC,7
+RXDTP                             00000005
+R_W                               00000002
+R_down                            000004D8
+R_high                            0xa7
+R_low                             0xa6
+R_out                             000002EC
+R_set                             000002C2
+R_up                              00000438
+S                                 00000003
+SBOREN                            00000006
+SCK                               00000003
+SCKP                              00000004
+SCL                               00000003
+SCS0                              00000000
+SCS1                              00000001
+SDA                               00000004
+SDI                               00000004
+SDO                               00000005
+SEN                               00000000
+SENDB                             00000003
+SMP                               00000007
+SP0                               00000000
+SP1                               00000001
+SP2                               00000002
+SP3                               00000003
+SP4                               00000004
+SPBRG                             00000FAF
+SPBRGH                            00000FB0
+SPEN                              00000007
+SREN                              00000005
+SS                                00000005
+SSPADD                            00000FC8
+SSPBUF                            00000FC9
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 42
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SSPCON1                           00000FC6
+SSPCON2                           00000FC5
+SSPEN                             00000005
+SSPIE                             00000003
+SSPIF                             00000003
+SSPIP                             00000003
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPOV                             00000006
+SSPSTAT                           00000FC7
+STATUS                            00000FD8
+STKFUL                            00000007
+STKOVF                            00000007
+STKPTR                            00000FFC
+STKUNF                            00000006
+SWDTE                             00000000
+SWDTEN                            00000000
+SYNC                              00000004
+T08BIT                            00000006
+T0CKI                             00000004
+T0CON                             00000FD5
+T0CS                              00000005
+T0IE                              00000005
+T0IF                              00000002
+T0PS0                             00000000
+T0PS1                             00000001
+T0PS2                             00000002
+T0SE                              00000004
+T13CKI                            00000000
+T1CKI                             00000000
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000FCD
+T1OSCEN                           00000003
+T1OSI                             00000001
+T1OSO                             00000000
+T1RUN                             00000006
+T1SYNC                            00000002
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             00000FCA
+T2OUTPS0                          00000003
+T2OUTPS1                          00000004
+T2OUTPS2                          00000005
+T2OUTPS3                          00000006
+T3CCP1                            00000003
+T3CCP2                            00000006
+T3CKPS0                           00000004
+T3CKPS1                           00000005
+T3CON                             00000FB1
+T3SYNC                            00000002
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 43
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TABLAT                            00000FF5
+TBLPTR                            00000FF6
+TBLPTRH                           00000FF7
+TBLPTRL                           00000FF6
+TBLPTRU                           00000FF8
+TMR0H                             00000FD7
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR0IP                            00000002
+TMR0L                             00000FD6
+TMR0ON                            00000007
+TMR1CS                            00000001
+TMR1H                             00000FCF
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1IP                            00000000
+TMR1L                             00000FCE
+TMR1ON                            00000000
+TMR2                              00000FCC
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2IP                            00000001
+TMR2ON                            00000002
+TMR3CS                            00000001
+TMR3H                             00000FB3
+TMR3IE                            00000001
+TMR3IF                            00000001
+TMR3IP                            00000001
+TMR3L                             00000FB2
+TMR3ON                            00000000
+TO                                00000003
+TOS                               00000FFD
+TOSH                              00000FFE
+TOSL                              00000FFD
+TOSU                              00000FFF
+TRISA                             00000F92
+TRISA0                            00000000
+TRISA1                            00000001
+TRISA2                            00000002
+TRISA3                            00000003
+TRISA4                            00000004
+TRISA5                            00000005
+TRISA6                            00000006
+TRISA7                            00000007
+TRISB                             00000F93
+TRISB0                            00000000
+TRISB1                            00000001
+TRISB2                            00000002
+TRISB3                            00000003
+TRISB4                            00000004
+TRISB5                            00000005
+TRISB6                            00000006
+TRISB7                            00000007
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 44
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TRISC                             00000F94
+TRISC0                            00000000
+TRISC1                            00000001
+TRISC2                            00000002
+TRISC3                            00000003
+TRISC4                            00000004
+TRISC5                            00000005
+TRISC6                            00000006
+TRISC7                            00000007
+TRISD                             00000F95
+TRISD0                            00000000
+TRISD1                            00000001
+TRISD2                            00000002
+TRISD3                            00000003
+TRISD4                            00000004
+TRISD5                            00000005
+TRISD6                            00000006
+TRISD7                            00000007
+TRISE                             00000F96
+TRISE0                            00000000
+TRISE1                            00000001
+TRISE2                            00000002
+TRMT                              00000001
+TUN0                              00000000
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TX                                00000006
+TX9                               00000006
+TX9D                              00000000
+TXCKP                             00000004
+TXD                               PORTC,6
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXIP                              00000004
+TXREG                             00000FAD
+TXSTA                             00000FAC
+T_out                             0000036E
+Temp                              0xa8
+UA                                00000001
+U_down                            0000048C
+U_high                            0xa5
+U_ist_1                           0xc0
+U_ist_2                           0xc1
+U_ist_3                           0xc2
+U_ist_4                           0xc3
+U_low                             0xa4
+U_out                             00000298
+U_set                             00000276
+U_up                              000003D4
+VCFG0                             00000004
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 45
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+VCFG1                             00000005
+VDIRMAG                           00000007
+VPP                               00000003
+VREFN                             00000002
+VREFP                             00000003
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000FD1
+WR                                00000001
+WREG                              00000FE8
+WREN                              00000002
+WRERR                             00000003
+WUE                               00000001
+Z                                 00000002
+_BOREN_NOSLP_2L                   000000FD
+_BOREN_OFF_2L                     000000F9
+_BOREN_ON_2L                      000000FB
+_BOREN_SBORDIS_2L                 000000FF
+_BORV_0_2L                        000000E7
+_BORV_1_2L                        000000EF
+_BORV_2_2L                        000000F7
+_BORV_3_2L                        000000FF
+_CCP2MX_PORTBE_3H                 000000FE
+_CCP2MX_PORTC_3H                  000000FF
+_CONFIG1H                         00300001
+_CONFIG2H                         00300003
+_CONFIG2L                         00300002
+_CONFIG3H                         00300005
+_CONFIG4L                         00300006
+_CONFIG5H                         00300009
+_CONFIG5L                         00300008
+_CONFIG6H                         0030000B
+_CONFIG6L                         0030000A
+_CONFIG7H                         0030000D
+_CONFIG7L                         0030000C
+_CP0_OFF_5L                       000000FF
+_CP0_ON_5L                        000000FE
+_CP1_OFF_5L                       000000FF
+_CP1_ON_5L                        000000FD
+_CP2_OFF_5L                       000000FF
+_CP2_ON_5L                        000000FB
+_CP3_OFF_5L                       000000FF
+_CP3_ON_5L                        000000F7
+_CPB_OFF_5H                       000000FF
+_CPB_ON_5H                        000000BF
+_CPD_OFF_5H                       000000FF
+_CPD_ON_5H                        0000007F
+_DEBUG_OFF_4L                     000000FF
+_DEBUG_ON_4L                      0000007F
+_DEVID1                           003FFFFE
+_DEVID2                           003FFFFF
+_EBTR0_OFF_7L                     000000FF
+_EBTR0_ON_7L                      000000FE
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 46
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_EBTR1_OFF_7L                     000000FF
+_EBTR1_ON_7L                      000000FD
+_EBTR2_OFF_7L                     000000FF
+_EBTR2_ON_7L                      000000FB
+_EBTR3_OFF_7L                     000000FF
+_EBTR3_ON_7L                      000000F7
+_EBTRB_OFF_7H                     000000FF
+_EBTRB_ON_7H                      000000BF
+_FCMEN_OFF_1H                     000000BF
+_FCMEN_ON_1H                      000000FF
+_IDLOC0                           00200000
+_IDLOC1                           00200001
+_IDLOC2                           00200002
+_IDLOC3                           00200003
+_IDLOC4                           00200004
+_IDLOC5                           00200005
+_IDLOC6                           00200006
+_IDLOC7                           00200007
+_IESO_OFF_1H                      0000007F
+_IESO_ON_1H                       000000FF
+_LPT1OSC_OFF_3H                   000000FB
+_LPT1OSC_ON_3H                    000000FF
+_LVP_OFF_4L                       000000FB
+_LVP_ON_4L                        000000FF
+_MCLRE_OFF_3H                     0000007F
+_MCLRE_ON_3H                      000000FF
+_OSC_ECIO6_1H                     000000F5
+_OSC_EC_1H                        000000F4
+_OSC_HSPLL_1H                     000000F6
+_OSC_HS_1H                        000000F2
+_OSC_INTIO67_1H                   000000F8
+_OSC_INTIO7_1H                    000000F9
+_OSC_LP_1H                        000000F0
+_OSC_RCIO6_1H                     000000F7
+_OSC_RC_1H                        000000F3
+_OSC_XT_1H                        000000F1
+_PBADEN_OFF_3H                    000000FD
+_PBADEN_ON_3H                     000000FF
+_PWRT_OFF_2L                      000000FF
+_PWRT_ON_2L                       000000FE
+_STVREN_OFF_4L                    000000FE
+_STVREN_ON_4L                     000000FF
+_WDTPS_1024_2H                    000000F5
+_WDTPS_128_2H                     000000EF
+_WDTPS_16384_2H                   000000FD
+_WDTPS_16_2H                      000000E9
+_WDTPS_1_2H                       000000E1
+_WDTPS_2048_2H                    000000F7
+_WDTPS_256_2H                     000000F1
+_WDTPS_2_2H                       000000E3
+_WDTPS_32768_2H                   000000FF
+_WDTPS_32_2H                      000000EB
+_WDTPS_4096_2H                    000000F9
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 47
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_WDTPS_4_2H                       000000E5
+_WDTPS_512_2H                     000000F3
+_WDTPS_64_2H                      000000ED
+_WDTPS_8192_2H                    000000FB
+_WDTPS_8_2H                       000000E7
+_WDT_OFF_2H                       000000FE
+_WDT_ON_2H                        000000FF
+_WRT0_OFF_6L                      000000FF
+_WRT0_ON_6L                       000000FE
+_WRT1_OFF_6L                      000000FF
+_WRT1_ON_6L                       000000FD
+_WRT2_OFF_6L                      000000FF
+_WRT2_ON_6L                       000000FB
+_WRT3_OFF_6L                      000000FF
+_WRT3_ON_6L                       000000F7
+_WRTB_OFF_6H                      000000FF
+_WRTB_ON_6H                       000000BF
+_WRTC_OFF_6H                      000000FF
+_WRTC_ON_6H                       000000DF
+_WRTD_OFF_6H                      000000FF
+_WRTD_ON_6H                       0000007F
+_XINST_OFF_4L                     000000BF
+_XINST_ON_4L                      000000FF
+__18F4520                         00000001
+__DEBUG                           1
+ad_high                           0x94
+ad_low                            0x93
+ad_port                           PORTA
+ad_temp                           0xb8
+ad_temp_l                         0xba
+ad_tris                           TRISA
+ad_wandeln                        00000524
+ad_wandeln_go                     00000540
+add0_bit                          PORTE, 1
+add0_tris                         TRISE, 1
+add1_bit                          PORTE, 1
+add1_tris                         TRISE, 1
+add_00_set                        000006B4
+add_01_set                        000006BE
+add_10_set                        000006C8
+add_11_set                        000006D2
+add_end                           000006DC
+add_set                           0000069A
+add_x1                            000006AA
+address                           0x95
+ausgabe                           0000088A
+auswertung                        00000180
+baud0_bit                         PORTC, 0
+baud0_tris                        TRISC, 0
+baud1_bit                         PORTE, 0
+baud1_tris                        TRISE, 0
+baud_00_set                       0000066A
+baud_01_set                       00000676
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 48
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+baud_10_set                       00000682
+baud_11_set                       0000068E
+baud_x1                           00000660
+bcd_I_1                           0xb0
+bcd_I_2                           0xb1
+bcd_I_3                           0xb2
+bcd_I_4                           0xb3
+bcd_R_1                           0xbb
+bcd_R_2                           0xbc
+bcd_R_3                           0xbd
+bcd_R_4                           0xbe
+bcd_R_5                           0xbf
+bcd_T_1                           0xb4
+bcd_T_2                           0xb5
+bcd_U_1                           0xac
+bcd_U_2                           0xad
+bcd_U_3                           0xae
+bcd_U_4                           0xaf
+bcd_temp                          0xb6
+bcd_wandeln_I                     0000064C
+bcd_wandeln_T                     0000064E
+bcd_wandeln_U                     0000058C
+bcd_wandeln_U1                    000005C2
+bcd_wandeln_U2                    00000620
+bcd_wandeln_U3                    00000632
+bcd_wandeln_U4                    00000640
+bcd_wandeln_U_end                 0000064A
+bcd_wandeln_multi                 00000596
+befehl                            0xa0
+bsr_temp                          00000083
+busy_loop                         00000998
+clear_go                          000008C6
+clr_home_l2                       00000BD0
+count_1                           00000078
+count_2                           0000008A
+count_3                           000000AC
+count_4                           000000CC
+count_5                           000000E8
+count_6                           000000FA
+count_7                           0000010C
+count_8                           0000011E
+count_9                           00000130
+counter                           0x9f
+dec_I_2                           000004C8
+dec_I_3                           000004CE
+dec_R_2                           000004EE
+dec_R_3                           000004F4
+dec_U_3                           000004A2
+dec_U_4                           000004A8
+dip_abfrage                       00000650
+discard                           0000013E
+inc_I_2                           00000420
+inc_I_2_go                        0000042C
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 49
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+inc_I_3                           00000432
+inc_R_2                           00000452
+inc_R_2_go                        0000045E
+inc_R_3                           00000464
+inc_U_3                           000003EE
+inc_U_3_go                        000003FA
+inc_U_4                           00000400
+inc_bcd_U                         000005EC
+inc_bcd_U_2                       0000061A
+inc_bcd_U_3                       00000614
+inc_bcd_U_4                       0000060E
+init_system                       000006DE
+int4                              PORTB,4
+int5                              PORTB,5
+int_tris                          TRISB
+isr                               00000008
+isr_down                          00000474
+isr_down_end                      000004FE
+isr_end                           00000038
+isr_loc                           000003B2
+isr_mode                          00000396
+isr_mode_end                      000003A8
+isr_onoff                         0000038A
+isr_up                            000003BC
+isr_up_end                        0000046A
+kurz_warten                       0000098C
+lange_pause                       000008DA
+lange_pause_go                    000008E0
+lcd_0                             0000083A
+lcd_ausgabe                       00000924
+lcd_busy                          00000994
+lcd_clear_l2                      000008BC
+lcd_data                          0x88
+lcd_data2                         0x89
+lcd_datenwort                     00000898
+lcd_enable                        PORTD,2
+lcd_home_l2                       000008AC
+lcd_init                          0000078E
+lcd_loesche_data                  00000974
+lcd_port                          PORTD
+lcd_rs                            PORTD,0
+lcd_rs_on                         0x91
+lcd_rw                            PORTD,1
+lcd_startup                       0x92
+lcd_status                        0x90
+lcd_steuerwort                    000008A0
+lcd_tris                          TRISD
+loop                              00000514
+loop1                             0x86
+loop2                             0x87
+loop3                             0xc8
+loop_0                            00000910
+loop_1                            0000090C
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 50
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+main                              00000508
+mini_loop                         0xab
+mode                              0xa1
+mode_0                            mode, 0
+mode_0_routine                    000009E6
+mode_I                            mode, 2
+mode_I_routine                    00000A6E
+mode_P                            mode, 3
+mode_P_routine                    00000AEC
+mode_R                            mode, 5
+mode_R_routine                    00000B7E
+mode_T                            mode, 4
+mode_T_routine                    00000B40
+mode_U                            mode, 1
+mode_U_routine                    000009F0
+mode_auswahl                      000009BE
+mode_reset                        000003A4
+not_I                             000001A2
+not_IU                            000001C2
+not_IUR                           000001E2
+not_IURP                          000001FA
+not_Iset                          0000019A
+not_Rset                          000001DA
+not_Uset                          000001BA
+pause                             00000908
+rs232_ausgabe                     00000986
+rs232_byte0                       0x96
+rs232_byte1                       0x97
+rs232_byte2                       0x98
+rs232_byte3                       0x99
+rs232_byte4                       0x9a
+rs232_byte5                       0x9b
+rs232_byte6                       0x9c
+rs232_byte7                       0x9d
+rs232_byte8                       0x9e
+rs232_int                         00000058
+rs232_int_end                     00000142
+set_lcd_rs                        00000980
+speicher_freigeben                00000212
+status_temp                       00000085
+t1_relais                         PORTD,7
+t1_tris                           TRISD,7
+t2_relais                         PORTC,1
+t2_tris                           TRISC,1
+t3_luefter                        PORTB,3
+t3_tris                           TRISB,3
+verarbeiten                       0000014A
+w_temp                            00000084
+warten                            0000054A
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 51
+
+
+MEMORY USAGE MAP ('X' = Used,  '-' = Unused)
+
+
+0000 : XXXX----XXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0040 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0080 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+00C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0100 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0140 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0180 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+01C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0200 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0240 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0280 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+02C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0300 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0340 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0380 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+03C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0400 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0440 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0480 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+04C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0500 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0540 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0580 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+05C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0600 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0640 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0680 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+06C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0700 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0740 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0780 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+07C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0800 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0840 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0880 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+08C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0900 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0940 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0980 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+09C0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0A00 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0A40 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0A80 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0AC0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0B00 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0B40 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+MPASM  5.37                     PROG_LAST.ASM   4-29-2011  15:07:18         PAGE 52
+
+
+MEMORY USAGE MAP ('X' = Used,  '-' = Unused)
+
+
+0B80 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0BC0 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0C00 : XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXX
+0C40 : XXXXXXXXXX------ ---------------- ---------------- ----------------
+
+All other memory blocks unused.
+
+Program Memory Bytes Used:  3142
+Program Memory Bytes Free: 29626
+
+
+Errors   :     0
+Warnings :     0 reported,     0 suppressed
+Messages :     0 reported,     0 suppressed
+
+
